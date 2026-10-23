@@ -21,7 +21,11 @@ jobs:
         run: |
           set -x
           # Some xnu generator scripts still have /usr/bin/python shebangs.
-          sudo ln -sf /usr/bin/python3 /usr/bin/python
+          # /usr/bin is read-only on the runner, so rewrite the shebangs in
+          # the checked-out tree instead.
+          grep -rl '^#!/usr/bin/python' xnu | while read -r f; do
+            sed -i '' '1s|^#!/usr/bin/python.*|#!/usr/bin/env python3|' "$f"
+          done
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-version
