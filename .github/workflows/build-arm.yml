@@ -45,6 +45,7 @@ jobs:
             KERNEL_CONFIGS=RELEASE \
             PLATFORM=iPhoneOS \
             SDKROOT=iphoneos \
+            SDKVERSION=10.0 \
             BUILD_LTO=0 \
             BUILD_DSYM=0 \
             BUILD_WERROR=0 \
