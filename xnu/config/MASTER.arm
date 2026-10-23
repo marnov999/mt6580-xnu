@@ -68,6 +68,8 @@ machine		"arm"						# <arm>
 
 makeoptions	OSFMK_MACHINE = "arm"				# <mach>
 
+options		CONFIG_EMBEDDED		# embedded platform (no EFI, no x86 TSC)
+
 options		COUNT_SYSCALLS		# count bsd system calls 	# <countcalls>
 
 options		SLIDABLE=1	# Use PIE-assembly in *.s	# <slidable>

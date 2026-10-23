@@ -220,7 +220,8 @@ CFLAGS_X86_64	= -Dx86_64 -DX86_64 -D__X86_64__ -DLP64 \
 CFLAGS_X86_64H = $(CFLAGS_X86_64)
 
 CFLAGS_ARM	= -Darm -D__arm__ -DARM -D__ARM__ -DLP32 \
-				-DPAGE_SIZE_FIXED -mkernel -msoft-float -mno-thumb
+				-DPAGE_SIZE_FIXED -mkernel -msoft-float -mno-thumb \
+				-mfpu=neon
 
 
 CFLAGS_RELEASEX86_64 = -O2
