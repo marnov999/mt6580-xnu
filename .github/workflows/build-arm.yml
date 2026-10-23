@@ -20,6 +20,8 @@ jobs:
       - name: Toolchain
         run: |
           set -x
+          # Some xnu generator scripts still have /usr/bin/python shebangs.
+          sudo ln -sf /usr/bin/python3 /usr/bin/python
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-version
