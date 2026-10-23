@@ -48,6 +48,10 @@ jobs:
             BUILD_LTO=0 \
             BUILD_DSYM=0 \
             BUILD_WERROR=0 \
+            CTFCONVERT=/usr/bin/true \
+            CTFMERGE=/usr/bin/true \
+            CTFINSERT=/usr/bin/true \
+            EMBEDDED_DEVICE_MAP=/dev/null \
             OBJROOT="$GITHUB_WORKSPACE/build/obj" \
             DSTROOT="$GITHUB_WORKSPACE/build/dst" \
             SYMROOT="$GITHUB_WORKSPACE/build/sym" \
