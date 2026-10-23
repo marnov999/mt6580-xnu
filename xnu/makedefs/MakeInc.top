@@ -87,6 +87,7 @@ endif
 override DEFAULT_I386_MACHINE_CONFIG := NONE
 override DEFAULT_X86_64_MACHINE_CONFIG := NONE
 override DEFAULT_X86_64H_MACHINE_CONFIG := NONE
+override DEFAULT_ARM_MACHINE_CONFIG := MT6580
 
 
 # This is typically never specified (TARGET_CONFIGS is used)

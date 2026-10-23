@@ -34,4 +34,14 @@
 #define PEXPERT_NO_3X_IMAGES	1
 #endif  /* ARM_BOARD_CONFIG_T8004 */
 
+#ifdef ARM_BOARD_CONFIG_MT6580
+#define ARMA7
+#define __XNU_UP__
+#include <pexpert/arm/MT6580.h>
+#define ARM_BOARD_WFE_TIMEOUT_NS 1000
+#define __ARM_L2CACHE_SIZE_LOG__ 19
+#define ARM_BOARD_CLASS_MT6580
+#define PEXPERT_NO_3X_IMAGES	1
+#endif  /* ARM_BOARD_CONFIG_MT6580 */
+
 #endif /* ! _PEXPERT_ARM_BOARD_CONFIG_H */

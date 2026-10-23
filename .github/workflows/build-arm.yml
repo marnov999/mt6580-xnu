@@ -1,0 +1,74 @@
+name: build-arm
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-arm.yml"
+      - "xnu/makedefs/**"
+      - "xnu/config/**"
+      - "xnu/pexpert/**"
+      - "xnu/osfmk/**"
+
+jobs:
+  xnu-armv7:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          set -x
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphoneos --find clang
+          xcrun --sdk iphoneos --find ld
+          xcrun --sdk iphoneos --find mig
+          ls "$(xcrun --sdk iphoneos --show-sdk-path)/usr/lib" | grep -E 'cc_kext|clang_rt' | head -40 || true
+
+      - name: Build armv7 XNU (MT6580)
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build/obj" "$GITHUB_WORKSPACE/build/dst" "$GITHUB_WORKSPACE/build/sym"
+          make -C xnu \
+            TARGET_CONFIGS="RELEASE ARM MT6580" \
+            ARCH_CONFIGS=ARM \
+            MACHINE_CONFIGS=MT6580 \
+            KERNEL_CONFIGS=RELEASE \
+            PLATFORM=iPhoneOS \
+            SDKROOT=iphoneos \
+            BUILD_LTO=0 \
+            BUILD_DSYM=0 \
+            BUILD_WERROR=0 \
+            OBJROOT="$GITHUB_WORKSPACE/build/obj" \
+            DSTROOT="$GITHUB_WORKSPACE/build/dst" \
+            SYMROOT="$GITHUB_WORKSPACE/build/sym" \
+            all 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Collect results
+        if: always()
+        run: |
+          echo '=== kernel files ==='
+          find "$GITHUB_WORKSPACE/build" -type f \( -name 'mach*' -o -name 'kernel*' \) -maxdepth 8 -print -exec file {} \; 2>/dev/null || true
+          echo '=== tail of build log ==='
+          tail -200 "$GITHUB_WORKSPACE/build.log" || true
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Upload kernel artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xnu-armv7
+          path: |
+            build/obj/**/mach*
+            build/sym/**/mach*
+          if-no-files-found: ignore

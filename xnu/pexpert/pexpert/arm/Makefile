@@ -14,6 +14,7 @@ DATAFILES = \
 	PL192_VIC.h \
 	protos.h \
 	S3cUART.h \
+	MT6580.h \
 	S7002.h \
 	T8002.h
 
