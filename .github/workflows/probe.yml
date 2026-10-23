@@ -1,0 +1,55 @@
+name: probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe.yml"
+
+jobs:
+  toolchain:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host and toolchain
+        run: |
+          set -x
+          sw_vers
+          uname -m
+          xcodebuild -version
+          xcode-select -p
+          clang --version
+          xcrun --sdk macosx --show-sdk-path
+          xcrun --sdk macosx --show-sdk-version
+          xcrun --find ld
+          ld -v 2>&1 | head -3 || true
+
+      - name: SDKs present
+        run: |
+          ls /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs
+          xcrun --sdk iphoneos --show-sdk-path 2>&1 || true
+          xcrun --sdk iphoneos --show-sdk-version 2>&1 || true
+
+      - name: armv7 compile/link probes
+        run: |
+          cat > t.c <<'EOF'
+          int f(int x) { return x + 1; }
+          EOF
+          set +e
+          echo '--- clang -arch armv7 (macOS SDK)'
+          clang -arch armv7 -c t.c -o t_arch.o; echo "exit=$?"
+          file t_arch.o 2>/dev/null
+          echo '--- clang -target armv7-apple-darwin'
+          clang -target armv7-apple-darwin -c t.c -o t_darwin.o; echo "exit=$?"
+          file t_darwin.o 2>/dev/null
+          echo '--- clang -target armv7-apple-ios10 (iPhoneOS SDK)'
+          IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null)
+          clang -target armv7-apple-ios10 -isysroot "$IOS_SDK" -c t.c -o t_ios.o; echo "exit=$?"
+          file t_ios.o 2>/dev/null
+          echo '--- ld -arch armv7'
+          ld -arch armv7 -r t_arch.o -o t_armv7.o; echo "exit=$?"
+          file t_armv7.o 2>/dev/null
+          echo '--- otool'
+          otool -h t_arch.o 2>&1 | head -5
