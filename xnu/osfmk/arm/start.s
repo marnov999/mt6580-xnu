@@ -28,6 +28,7 @@
 
 #include <arm/asm.h>
 #include <arm/proc_reg.h>
+#include <pexpert/arm/board_config.h>
 #include <mach_kdp.h>
 #include "assym.s"
 
@@ -132,7 +133,13 @@ LEXT(_start)
 	LOAD_ADDR(r4, fleh_irq)
 	add		r5, #4
 	str		r4, [r5]
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/* MT6580's timer is a GIC group-0 PPI, so the FIQ handler must
+	 * acknowledge the GIC before running the common decrementer path. */
+	LOAD_ADDR(r4, fleh_fiq_mt6580)
+#else
 	LOAD_ADDR(r4, fleh_decirq)
+#endif
 	add		r5, #4
 	str		r4, [r5]
 
@@ -428,6 +435,9 @@ LOAD_ADDR_GEN_DEF(fleh_dataabt)
 LOAD_ADDR_GEN_DEF(fleh_addrexc)
 LOAD_ADDR_GEN_DEF(fleh_irq)
 LOAD_ADDR_GEN_DEF(fleh_decirq)
+#if defined(ARM_BOARD_CLASS_MT6580)
+LOAD_ADDR_GEN_DEF(fleh_fiq_mt6580)
+#endif
 
 #include "globals_asm.h"
 

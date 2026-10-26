@@ -1587,10 +1587,18 @@ fleh_decirq_handler:
 	.align 2
 	.globl EXT(fleh_fiq_mt6580)
 LEXT(fleh_fiq_mt6580)
+	/* __ARM_TIME__ does not run the fiq_context_init path that loads
+	 * r8-r11, so fetch the GIC CPU interface and the timer interrupt
+	 * ID from the current cpu_data. */
+	mrc		p15, 0, r12, c13, c0, 4				// Read TPIDRPRW
+	ldr		r12, [r12, ACT_CPUDATAP]			// Get current cpu data
+	ldr		r10, [r12, CPU_TBD_HARDWARE_ADDR]	// GIC CPU interface
+	ldr		r11, [r12, CPU_TBD_HARDWARE_VAL]	// timer interrupt ID
 	ldr		r12, [r10, #MT6580_GICC_IAR]		// Acknowledge the interrupt
-	str		r12, [r10, #MT6580_GICC_EOIR]		// Signal end of interrupt
+	mov		r11, r12							// Keep the IAR value for EOI
 	mvn		r12, #0x80000000					// CNTV_TVAL = 0x7FFFFFFF
-	mcr		p15, 0, r12, c14, c3, 0				// Clear the virtual timer
+	mcr		p15, 0, r12, c14, c3, 0				// Deassert the virtual timer
+	str		r11, [r10, #MT6580_GICC_EOIR]		// Signal end of interrupt
 	b		EXT(fleh_dec)						// Run the XNU decrementer path
 #endif /* ARM_BOARD_CLASS_MT6580 */
 
