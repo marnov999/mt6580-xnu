@@ -71,7 +71,6 @@
  * 0xc0001000 or higher to leave space for it.
  */
 	.syntax unified
-	.arch armv7ve
 	.text
 	.align 12
 	.globl EXT(ExceptionLowVectorsBase)
@@ -406,9 +405,9 @@ ELSE_IF_KERNELMODE_EXCEPTION undef
 	add		r7, sp, EXC_CTX_SIZE						// Save frame pointer
 #endif
 
-	mrs		r4, lr_und
+	.long		0xe1064300					// mrs r4, lr_und
 	str		r4, [sp, SS_PC]						// Save complete
-	mrs		r4, spsr_und
+	.long		0xe1464300					// mrs r4, spsr_und
 	str		r4, [sp, SS_CPSR]	
 
 	mov		ip, sp
@@ -933,7 +932,7 @@ ELSE_IF_KERNELMODE_EXCEPTION prefabt
 	isb
 #endif
 
-	mrs		r4, lr_abt
+	.long		0xe1044300					// mrs r4, lr_abt
 	str		r4, [sp, SS_PC]					// Save pc
 
 	mrc		p15, 0, r5, c6, c0, 2 				// Read IFAR
@@ -941,7 +940,7 @@ ELSE_IF_KERNELMODE_EXCEPTION prefabt
 	mrc		p15, 0, r5, c5, c0, 1 				// Read (instruction) Fault Status
 	str		r5, [sp, SS_STATUS]					// Save fault status register to pcb
 
-	mrs		r4, spsr_abt
+	.long		0xe1444300					// mrs r4, spsr_abt
 	str		r4, [sp, SS_CPSR]	
 
 	mov		r0, sp
@@ -1062,9 +1061,9 @@ ELSE_IF_KERNELMODE_EXCEPTION dataabt
 	fmxr		fpscr, r4					// And shove it into FPSCR
 #endif
 
-	mrs		r4, lr_abt
+	.long		0xe1044300					// mrs r4, lr_abt
 	str		r4, [sp, SS_PC]
-	mrs		r4, spsr_abt
+	.long		0xe1444300					// mrs r4, spsr_abt
 	str		r4, [sp, SS_CPSR]	
 
 #if __ARM_USER_PROTECT__
