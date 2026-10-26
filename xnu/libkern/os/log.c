@@ -616,3 +616,42 @@ __firehose_critical_region_leave(void) {
         return;
 }
 
+
+#ifdef ARM_MT6580
+/*
+ * Minimal firehose stubs for the MT6580 bring-up kernel.
+ *
+ * The real implementations live in the SDK's libfirehose_kernel, which is
+ * not available for armv7 here.  Returning NULL from the reserve/create
+ * functions makes os_log fall back to the boot chunk / drop messages; kprintf
+ * output is unaffected.  This is sufficient until the display console and
+ * the rest of the platform are up.
+ */
+firehose_buffer_t
+__firehose_buffer_create(size_t *size)
+{
+	if (size) {
+		*size = 0;
+	}
+	return NULL;
+}
+
+firehose_tracepoint_t
+__firehose_buffer_tracepoint_reserve(uint64_t stamp __unused,
+    firehose_stream_t stream __unused, uint16_t publen __unused,
+    uint16_t flags __unused, void *ctx __unused)
+{
+	return NULL;
+}
+
+void
+__firehose_buffer_tracepoint_flush(firehose_tracepoint_t ft __unused,
+    firehose_tracepoint_id_u ftid __unused)
+{
+}
+
+void
+__firehose_merge_updates(firehose_push_reply_t reply __unused)
+{
+}
+#endif /* ARM_MT6580 */

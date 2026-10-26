@@ -136,6 +136,17 @@ void
 machine_do_mvfpid()
 {
 #if __arm__
+#if defined(ARM_MT6580)
+	/*
+	 * The MT6580 kernel is built with -msoft-float for early bring-up,
+	 * which makes the integrated assembler reject the VFP2 `vmrs`
+	 * instruction below.  Cortex-A7 implements NEON (and VFPv4), so
+	 * report NEON without touching the VFP registers.  Half-precision
+	 * support is left off until the userland/commpage work needs it.
+	 */
+	cpuid_mvfp_info.neon = 1;
+	cpuid_mvfp_info.neon_hpfp = 0;
+#else
 	arm_mvfr0_info_t	arm_mvfr0_info;
 	arm_mvfr1_info_t	arm_mvfr1_info;
 
@@ -144,6 +155,7 @@ machine_do_mvfpid()
 
 	cpuid_mvfp_info.neon = arm_mvfr1_info.bits.SP;
 	cpuid_mvfp_info.neon_hpfp = arm_mvfr1_info.bits.HPFP;
+#endif /* ARM_MT6580 */
 #else
 	cpuid_mvfp_info.neon = 1;
 	cpuid_mvfp_info.neon_hpfp = 1;
