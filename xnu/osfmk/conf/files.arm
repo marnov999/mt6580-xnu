@@ -38,8 +38,10 @@ osfmk/arm/mcount.s		optional profile
 osfmk/arm/WKdmDecompress_new.s	standard
 osfmk/arm/WKdmCompress_new.s	standard
 osfmk/arm/WKdmData_new.s	standard
-osfmk/arm/lz4_decode_armv7NEON.s standard
-osfmk/arm/lz4_encode_armv7.s standard
+# The public armv7 tree compiles lz4.c without __ARM_NEON__ (the kernel C
+# flags use soft-float), so the generic C lz4 paths are used instead of the
+# armv7 NEON assembly.  Do not list the assembly here or the encode/decode
+# symbols are defined twice.
 osfmk/arm/bcopy.s	standard
 osfmk/arm/bzero.s	standard
 osfmk/arm/strlen.s	standard
