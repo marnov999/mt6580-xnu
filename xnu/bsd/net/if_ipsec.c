@@ -373,6 +373,7 @@ ipsec_interface_isvalid (ifnet_t interface)
 boolean_t
 ipsec_interface_needs_netagent(ifnet_t interface)
 {
+#if IPSEC_NEXUS
 	struct ipsec_pcb *pcb = NULL;
 
 	if (interface == NULL) {
@@ -386,6 +387,10 @@ ipsec_interface_needs_netagent(ifnet_t interface)
 	}
 
 	return (pcb->ipsec_needs_netagent == true);
+#else
+	(void)interface;
+	return (FALSE);
+#endif /* IPSEC_NEXUS */
 }
 
 static errno_t
