@@ -56,8 +56,8 @@ pe_identify_machine(boot_args * bootArgs)
 		return;
 
 #if defined(ARM_BOARD_CLASS_MT6580)
-	/* The stock MT6580 device tree is a Linux FDT and has no Apple
-	 * "arm-io" node.  Supply the platform identity directly. */
+	/* The shim supplies a minimal Apple device tree whose /arm-io node
+	 * reports device_type "mt6580-io" and a SoC base of 0x10000000. */
 	if (!strcmp(gPESoCDeviceType, "mt6580-io")) {
 		bzero((void *)&gPEClockFrequencyInfo, sizeof(clock_frequency_info_t));
 
@@ -267,16 +267,6 @@ pe_arm_get_soc_base_phys(void)
 	uintptr_t 	*ranges_prop;
 	uint32_t	prop_size;
 	char           *tmpStr;
-
-#if defined(ARM_BOARD_CLASS_MT6580)
-	/* The MT6580 Linux FDT has no Apple-style "arm-io" node.  The
-	 * platform expert needs a non-zero SoC base to proceed, and all
-	 * of the early platform devices are at fixed physical offsets
-	 * from 0x10000000. */
-	gPESoCDeviceType = "mt6580-io";
-	gPESoCBasePhys = MT6580_SOC_PHYS_BASE;
-	return gPESoCBasePhys;
-#endif
 
 	if (DTFindEntry("name", "arm-io", &entryP) == kSuccess) {
 		if (gPESoCDeviceType == 0) {

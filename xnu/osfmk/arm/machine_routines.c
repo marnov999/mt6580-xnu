@@ -468,8 +468,8 @@ ml_parse_cpu_topology(void)
 	}
 
 #if defined(__XNU_UP__)
-	/* This bring-up kernel is uniprocessor.  The stock MT6580 FDT
-	 * still describes all four CPUs, so ignore the extra ones. */
+	/* This bring-up kernel is uniprocessor.  The ADT describes all four
+	 * CPUs, so ignore the extra ones until SMP bring-up. */
 	avail_cpus = 1;
 #endif
 
