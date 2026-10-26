@@ -1,3 +1,4 @@
-libkern/zlib/arm/inffastS.s			optional zlib
-libkern/zlib/arm/adler32vec.s		optional zlib
+# The public armv7 tree does not ship the optimized zlib assembly routines
+# (inffastS.s / adler32vec.s).  The generic C versions in libkern/conf/files
+# are used instead.
 
