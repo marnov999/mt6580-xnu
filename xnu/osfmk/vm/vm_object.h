@@ -171,7 +171,7 @@ struct vm_object {
 	int			ref_count;	/* Number of references */
 	unsigned int		resident_page_count;
 						/* number of resident pages */
-	const unsigned int	wired_page_count; /* number of wired pages
+	unsigned int		wired_page_count; /* number of wired pages
 						     use VM_OBJECT_WIRED_PAGE_UPDATE macros to update */
 	unsigned int		reusable_page_count;
 
