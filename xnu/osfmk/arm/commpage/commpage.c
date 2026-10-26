@@ -50,8 +50,10 @@
 #include <arm/rtclock.h>
 #include <libkern/OSAtomic.h>
 #include <stdatomic.h>
+#ifdef __arm64__
 #include <kern/remote_time.h>
 #include <machine/machine_remote_time.h>
+#endif /* __arm64__ */
 
 #include <sys/kdebug.h>
 
