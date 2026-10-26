@@ -5,10 +5,7 @@ on:
   push:
     paths:
       - ".github/workflows/build-arm.yml"
-      - "xnu/makedefs/**"
-      - "xnu/config/**"
-      - "xnu/pexpert/**"
-      - "xnu/osfmk/**"
+      - "xnu/**"
 
 jobs:
   xnu-armv7:
