@@ -71,6 +71,7 @@
  * 0xc0001000 or higher to leave space for it.
  */
 	.syntax unified
+	.arch armv7ve
 	.text
 	.align 12
 	.globl EXT(ExceptionLowVectorsBase)
