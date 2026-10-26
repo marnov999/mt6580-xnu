@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 helpdoc = """
 A simple utility that verifies the syntax for python scripts.
@@ -8,44 +8,48 @@ The checks it does are :
 Usage:
   python syntax_checker.py <python_source_file> [<python_source_file> ..] 
 """
-import py_compile
 import sys
 import os
 import re
 
-tabs_search_rex = re.compile("^\s*\t+",re.MULTILINE|re.DOTALL)
+tabs_search_rex = re.compile(r"^\s*\t+", re.MULTILINE | re.DOTALL)
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print >>sys.stderr, "Error: Unknown arguments"
-        print helpdoc
+        eprint("Error: Unknown arguments")
+        print(helpdoc)
         sys.exit(1)
     for fname in sys.argv[1:]:
         if not os.path.exists(fname):
-            print >>sys.stderr, "Error: Cannot recognize %s as a file" % fname
+            eprint("Error: Cannot recognize %s as a file" % fname)
             sys.exit(1)
         if fname.split('.')[-1] != 'py':
-            print "Note: %s is not a valid python file. Skipping." % fname
+            print("Note: %s is not a valid python file. Skipping." % fname)
             continue
-        fh = open(fname)
-        strdata = fh.readlines()
+        with open(fname, 'r') as fh:
+            strdata = fh.readlines()
         lineno = 0
         tab_check_status = True
         for linedata in strdata:
             lineno += 1
-            if len(tabs_search_rex.findall(linedata)) > 0 :
-                print >>sys.stderr, "Error: Found a TAB character at %s:%d" % (fname, lineno)
+            if len(tabs_search_rex.findall(linedata)) > 0:
+                eprint("Error: Found a TAB character at %s:%d" % (fname, lineno))
                 tab_check_status = False
-        if tab_check_status == False:
-            print >>sys.stderr, "Error: Syntax check failed. Please fix the errors and try again."
+        if not tab_check_status:
+            eprint("Error: Syntax check failed. Please fix the errors and try again.")
             sys.exit(1)
-        #now check for error in compilation
+        # Now check for errors in compilation.
         try:
-            compile_result = py_compile.compile(fname, cfile="/dev/null", doraise=True)
-        except py_compile.PyCompileError as exc:
-            print >>sys.stderr, str(exc)
-            print >>sys.stderr, "Error: Compilation failed. Please fix the errors and try again."
+            with open(fname, 'r') as fh:
+                compile(fh.read(), fname, 'exec')
+        except SyntaxError as exc:
+            eprint(str(exc))
+            eprint("Error: Compilation failed. Please fix the errors and try again.")
             sys.exit(1)
-        print "Success: Checked %s. No syntax errors found." % fname
+        print("Success: Checked %s. No syntax errors found." % fname)
     sys.exit(0)
-

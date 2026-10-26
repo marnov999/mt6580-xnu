@@ -8,7 +8,15 @@ include $(MakeInc_def)
 
 .PHONY: lldbmacros_install
 
+ifeq ($(CURRENT_ARCH_CONFIG),ARM)
+# The lldbmacros in this source drop are Python 2 scripts.  The armv7
+# bring-up build uses a Python 3-only toolchain, and these debugger
+# macros are not needed to produce or boot the kernel.
+do_config_all::
+	@echo "$(ColorH)SKIP$(Color0)    lldbmacros (Python 2 scripts, ARM bring-up)"
+else
 do_config_all:: lldbmacros_install
+endif
 
 LLDBMACROS_SOURCE:=$(SRCROOT)/tools/lldbmacros/
 LLDBMACROS_BOOTSTRAP_DEST:=$(OBJPATH)/$(KERNEL_FILE_NAME).dSYM/$(DSYMLLDBMACROSDIR)
