@@ -11,14 +11,13 @@ Build tree for porting XNU (xnu-4570.71.2, armv7) to the MediaTek MT6580.
 
 The ARM32 build-system support and MT6580 machine config are in place.
 CI now compiles most of `bsd`, `osfmk` and `iokit` for armv7.  It is not yet
-linking; the two remaining source blockers are:
+linking.  The VFP2 `vmrs` issue and the missing `os/firehose_buffer_private.h`
+are fixed; the current blocker is in `bsd/net/dlil.c`:
 
-1. `osfmk/arm/machine_cpuid.c` uses `vmrs` (VFP2), which the assembler rejects
-   with the current `-msoft-float` flags.  Guard the MT6580 path or adjust the
-   float ABI.
-2. `os/firehose_buffer_private.h` is missing from the public tree and the
-   iPhoneOS 17.5 SDK.  Add a local compatibility header/stubs or disable
-   oslog for the first ARM kernel.
+- The static assertions require 64-bit fields in `struct if_data_internal`
+  to be 8-byte aligned, but on the armv7 build they land at 4-byte alignment.
+  Next: confirm whether `#pragma pack(4)` is leaking or whether explicit
+  padding / `aligned(8)` is needed.
 
 See the project-level `XNU-ARM-BUILD-STATUS.md` for the full log, exact CI
 runs, and next steps.
