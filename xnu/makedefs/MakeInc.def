@@ -309,7 +309,7 @@ SFLAGS_PROFILE	=
 
 SFLAGS_X86_64	= $(CFLAGS_X86_64)
 SFLAGS_X86_64H	= $(CFLAGS_X86_64H)
-SFLAGS_ARM	= $(filter-out -msoft-float,$(CFLAGS_ARM))
+SFLAGS_ARM	= $(filter-out -msoft-float,$(CFLAGS_ARM)) -march=armv7ve
 
 SFLAGS	= $(SFLAGS_GEN) \
 		  $($(addsuffix $(CURRENT_MACHINE_CONFIG),MACHINE_FLAGS_$(CURRENT_ARCH_CONFIG)_)) \
