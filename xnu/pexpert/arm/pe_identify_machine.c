@@ -55,6 +55,45 @@ pe_identify_machine(boot_args * bootArgs)
 	if (pe_arm_get_soc_base_phys() == 0)
 		return;
 
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/* The stock MT6580 device tree is a Linux FDT and has no Apple
+	 * "arm-io" node.  Supply the platform identity directly. */
+	if (!strcmp(gPESoCDeviceType, "mt6580-io")) {
+		bzero((void *)&gPEClockFrequencyInfo, sizeof(clock_frequency_info_t));
+
+		mclk = MT6580_CPU_FREQ;
+		hclk = MT6580_BUS_FREQ;
+		pclk = MT6580_PRF_FREQ;
+		tclk = MT6580_CNTFRQ;
+
+		gPEClockFrequencyInfo.timebase_frequency_hz = tclk;
+		gPEClockFrequencyInfo.fix_frequency_hz = tclk;
+		gPEClockFrequencyInfo.bus_frequency_hz = hclk;
+		gPEClockFrequencyInfo.cpu_frequency_hz = mclk;
+		gPEClockFrequencyInfo.prf_frequency_hz = pclk;
+
+		gPEClockFrequencyInfo.bus_frequency_min_hz = hclk;
+		gPEClockFrequencyInfo.bus_frequency_max_hz = hclk;
+		gPEClockFrequencyInfo.cpu_frequency_min_hz = mclk;
+		gPEClockFrequencyInfo.cpu_frequency_max_hz = mclk;
+		gPEClockFrequencyInfo.prf_frequency_min_hz = pclk;
+		gPEClockFrequencyInfo.prf_frequency_max_hz = pclk;
+
+		gPEClockFrequencyInfo.dec_clock_rate_hz = tclk;
+		gPEClockFrequencyInfo.bus_clock_rate_hz = hclk;
+		gPEClockFrequencyInfo.cpu_clock_rate_hz = mclk;
+
+		gPEClockFrequencyInfo.bus_clock_rate_num = hclk;
+		gPEClockFrequencyInfo.bus_clock_rate_den = 1;
+		gPEClockFrequencyInfo.bus_to_cpu_rate_num = (2 * mclk) / hclk;
+		gPEClockFrequencyInfo.bus_to_cpu_rate_den = 2;
+		gPEClockFrequencyInfo.bus_to_dec_rate_num = 1;
+		gPEClockFrequencyInfo.bus_to_dec_rate_den = hclk / tclk;
+
+		return;
+	}
+#endif /* ARM_BOARD_CLASS_MT6580 */
+
 	/* Clear the gPEClockFrequencyInfo struct */
 	bzero((void *)&gPEClockFrequencyInfo, sizeof(clock_frequency_info_t));
 
@@ -229,6 +268,16 @@ pe_arm_get_soc_base_phys(void)
 	uint32_t	prop_size;
 	char           *tmpStr;
 
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/* The MT6580 Linux FDT has no Apple-style "arm-io" node.  The
+	 * platform expert needs a non-zero SoC base to proceed, and all
+	 * of the early platform devices are at fixed physical offsets
+	 * from 0x10000000. */
+	gPESoCDeviceType = "mt6580-io";
+	gPESoCBasePhys = MT6580_SOC_PHYS_BASE;
+	return gPESoCBasePhys;
+#endif
+
 	if (DTFindEntry("name", "arm-io", &entryP) == kSuccess) {
 		if (gPESoCDeviceType == 0) {
 			DTGetProperty(entryP, "device_type", (void **)&tmpStr, &prop_size);
@@ -297,10 +346,75 @@ static struct tbd_ops    t8010_funcs = {NULL, NULL, NULL};
 static struct tbd_ops    t8011_funcs = {NULL, NULL, NULL};
 #endif /* defined(ARM_BOARD_CLASS_T8011) */
 
+#if defined(ARM_BOARD_CLASS_MT6580)
+extern void	fleh_fiq_mt6580(void);
 
+static uint32_t
+mt6580_get_decrementer(void)
+{
+	uint32_t value;
 
+	__asm__ volatile("mrc p15, 0, %0, c14, c3, 0" : "=r" (value));
+	return value;
+}
 
+static void
+mt6580_set_decrementer(uint32_t value)
+{
+	uint32_t ctl = 1;
 
+	__asm__ volatile("mcr p15, 0, %0, c14, c3, 0" :: "r" (value));
+	__asm__ volatile("mcr p15, 0, %0, c14, c3, 1" :: "r" (ctl));
+	__asm__ volatile("isb" ::: "memory");
+}
+
+static void
+mt6580_gic_init(uintptr_t gic_base)
+{
+	uintptr_t gicd = gic_base;
+	uintptr_t gicc = gic_base + MT6580_GIC_CPU_OFFSET;
+	uint32_t icfgr;
+	uint32_t igroupr;
+
+	/* LK has already put the distributor in group-0 mode with a
+	 * priority of 0xA0.  Re-assert the settings we depend on and
+	 * leave the rest of the interrupt map alone. */
+	mt6580_write32(gicd + MT6580_GICD_CTLR, 1);
+	*(volatile uint8_t *)(gicd + MT6580_GICD_IPRIORITYR +
+	    MT6580_TIMER_IRQ) = 0xA0;
+
+	/* Keep the timer PPI in group 0 so the CPU interface can route
+	 * it to FIQ.  On a single-security-state GIC this register is
+	 * effectively read-only and the write is harmless. */
+	igroupr = mt6580_read32(gicd + MT6580_GICD_IGROUPR0);
+	igroupr &= ~(1u << MT6580_TIMER_IRQ);
+	mt6580_write32(gicd + MT6580_GICD_IGROUPR0, igroupr);
+
+	/* The generic timer PPI is level-sensitive.  GICD_ICFGR1 covers
+	 * PPIs 16..31; each interrupt has two configuration bits. */
+	icfgr = mt6580_read32(gicd + MT6580_GICD_ICFGR1);
+	icfgr &= ~(3u << ((MT6580_TIMER_IRQ - 16) * 2));
+	mt6580_write32(gicd + MT6580_GICD_ICFGR1, icfgr);
+
+	mt6580_write32(gicd + MT6580_GICD_ISENABLER0,
+	    1u << MT6580_TIMER_IRQ);
+
+	/* CPU interface: allow all priorities, one priority bit of
+	 * preemption, enable group 0 and route group 0 to FIQ. */
+	mt6580_write32(gicc + MT6580_GICC_PMR, 0xF0);
+	mt6580_write32(gicc + MT6580_GICC_BPR, 0);
+	mt6580_write32(gicc + MT6580_GICC_CTLR, 0x9);
+
+	__asm__ volatile("dsb" ::: "memory");
+	__asm__ volatile("isb" ::: "memory");
+}
+
+static struct tbd_ops    mt6580_funcs = {
+	&fleh_fiq_mt6580,
+	&mt6580_get_decrementer,
+	&mt6580_set_decrementer
+};
+#endif /* defined(ARM_BOARD_CLASS_MT6580) */
 
 vm_offset_t	gPicBase;
 vm_offset_t	gTimerBase;
@@ -538,6 +652,20 @@ pe_arm_map_interrupt_controller(void)
 	if (soc_phys == 0)
 		return 0;
 
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/* Map the GIC-400 distributor and CPU interface as one contiguous
+	 * region.  gPicBase points at the distributor; the CPU interface
+	 * lives at gPicBase + 0x1000. */
+	if (!strcmp(gPESoCDeviceType, "mt6580-io")) {
+		gPicBase = ml_io_map(MT6580_GIC_DIST_BASE,
+		    MT6580_GIC_DIST_SIZE + MT6580_GIC_CPU_SIZE);
+		gTimerBase = gPicBase;
+		kprintf("pe_arm_map_interrupt_controller: mt6580 gic: 0x%lx\n",
+		    (unsigned long)gPicBase);
+		return (gPicBase != 0);
+	}
+#endif /* ARM_BOARD_CLASS_MT6580 */
+
 	if (DTFindEntry("interrupt-controller", "master", &entryP) == kSuccess) {
 		kprintf("pe_arm_map_interrupt_controller: found interrupt-controller\n");
 		DTGetProperty(entryP, "reg", (void **)&reg_prop, &prop_size);
@@ -594,6 +722,17 @@ pe_arm_init_timer(void *args)
 	timer_base = gTimerBase;
 	soc_phys = gSocPhys;
 
+#if defined(ARM_BOARD_CLASS_MT6580)
+	if (!strcmp(gPESoCDeviceType, "mt6580-io")) {
+		/* gPicBase maps the distributor; the CPU interface is one
+		 * page later.  The FIQ handler uses r10 as the CPU
+		 * interface base and r11 as the timer interrupt ID. */
+		mt6580_gic_init(pic_base);
+		eoi_addr = pic_base + MT6580_GIC_CPU_OFFSET;
+		eoi_value = MT6580_TIMER_IRQ;
+		tbd_funcs = &mt6580_funcs;
+	} else
+#endif
 #if defined(ARM_BOARD_CLASS_S5L8960X)
 	if (!strcmp(gPESoCDeviceType, "s5l8960x-io")) {
 

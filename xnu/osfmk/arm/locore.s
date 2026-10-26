@@ -1574,6 +1574,26 @@ fleh_decirq_handler:
  * But if the current thread was running on user mode before the FIQ interrupt,
  * All user registers be saved for ast handler routine.
  */
+#if defined(ARM_BOARD_CLASS_MT6580)
+/*
+ * MT6580 FIQ handler.
+ *
+ * r10 points at the GIC CPU interface and r11 holds the virtual timer
+ * interrupt ID (27).  Acknowledge the interrupt, end it, clear the
+ * generic virtual timer, then let the common decrementer path run the
+ * XNU timer interrupt.
+ */
+	.text
+	.align 2
+	.globl EXT(fleh_fiq_mt6580)
+LEXT(fleh_fiq_mt6580)
+	ldr		r12, [r10, #MT6580_GICC_IAR]		// Acknowledge the interrupt
+	str		r12, [r10, #MT6580_GICC_EOIR]		// Signal end of interrupt
+	mvn		r12, #0x80000000					// CNTV_TVAL = 0x7FFFFFFF
+	mcr		p15, 0, r12, c14, c3, 0				// Clear the virtual timer
+	b		EXT(fleh_dec)						// Run the XNU decrementer path
+#endif /* ARM_BOARD_CLASS_MT6580 */
+
 	.text
 	.align 2
 	.globl EXT(fleh_fiq_generic)

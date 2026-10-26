@@ -467,6 +467,12 @@ ml_parse_cpu_topology(void)
 		++avail_cpus;
 	}
 
+#if defined(__XNU_UP__)
+	/* This bring-up kernel is uniprocessor.  The stock MT6580 FDT
+	 * still describes all four CPUs, so ignore the extra ones. */
+	avail_cpus = 1;
+#endif
+
 	cpu_boot_arg = avail_cpus;
 	if (PE_parse_boot_argn("cpus", &cpu_boot_arg, sizeof(cpu_boot_arg)) &&
 	    (avail_cpus > cpu_boot_arg))
