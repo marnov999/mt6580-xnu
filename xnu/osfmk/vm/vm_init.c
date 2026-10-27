@@ -261,28 +261,42 @@ vm_mem_bootstrap(void)
 	 * page allocations (which are used for guard pages by the guard
 	 * mode zone allocator).
 	 */
+	MT6580_VM_LINE(38, "vm_page_module_init");
 	vm_mem_bootstrap_log("vm_page_module_init");
 	vm_page_module_init();
+	MT6580_VM_LINE(39, "vm_page_module_init ok");
 
+	MT6580_VM_LINE(40, "kalloc_init");
 	vm_mem_bootstrap_log("kalloc_init");
 	kalloc_init();
+	MT6580_VM_LINE(41, "kalloc_init ok");
 
+	MT6580_VM_LINE(42, "vm_fault_init");
 	vm_mem_bootstrap_log("vm_fault_init");
 	vm_fault_init();
+	MT6580_VM_LINE(43, "vm_fault_init ok");
 
+	MT6580_VM_LINE(44, "memory_manager_default_init");
 	vm_mem_bootstrap_log("memory_manager_default_init");
 	memory_manager_default_init();
+	MT6580_VM_LINE(45, "memory_manager_default_init ok");
 
+	MT6580_VM_LINE(46, "memory_object_control_bootstrap");
 	vm_mem_bootstrap_log("memory_object_control_bootstrap");
 	memory_object_control_bootstrap();
+	MT6580_VM_LINE(47, "memory_object_control_bootstrap ok");
 
+	MT6580_VM_LINE(48, "device_pager_bootstrap");
 	vm_mem_bootstrap_log("device_pager_bootstrap");
 	device_pager_bootstrap();
+	MT6580_VM_LINE(49, "device_pager_bootstrap ok");
 
+	MT6580_VM_LINE(50, "vm_paging_map_init");
 	vm_paging_map_init();
+	MT6580_VM_LINE(51, "vm_paging_map_init ok");
 
 	vm_mem_bootstrap_log("vm_mem_bootstrap done");
-	MT6580_VM_LINE(37, "vm_mem_bootstrap done");
+	MT6580_VM_LINE(52, "vm_mem_bootstrap done");
 }
 
 void
