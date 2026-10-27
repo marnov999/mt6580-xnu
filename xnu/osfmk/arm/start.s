@@ -124,6 +124,16 @@ LEXT(_start)
 	ldr		r9, [r0, BA_VIRT_BASE]				// Get the virt base in r9
 	ldr		r10, [r0, BA_MEM_SIZE]				// Get the mem size in r10
 
+	/*
+	 * Clamp the size to just below 2 GB so a caller that describes the
+	 * whole DRAM window (0x80000000 bytes) still gets a linear mapping
+	 * and arm_vm_init() does not compute gPhysBase + gPhysSize, which
+	 * would wrap for exactly 2 GB.
+	 */
+	ldr		r3, =0x7ff00000
+	cmp		r10, r3
+	movhi	r10, r3
+
 #define LOAD_PHYS_ADDR(reg, label) \
 	LOAD_ADDR(reg, label); \
 	sub		reg, reg, r9; \
@@ -222,7 +232,7 @@ invalidate_tte:
 	
 mapveqp:
 	cmp		r3, r10								// Check if we're beyond the last 1MB section
-	bgt		mapveqpL2							// If so, a coarse entry is required
+	bhi		mapveqpL2							// If so, a coarse entry is required
 
 	orr		r11, r7, r6							// make tte entry value
 	str		r11, [r5], #4						// store tte and move to next
