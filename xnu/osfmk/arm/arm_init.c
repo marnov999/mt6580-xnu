@@ -152,6 +152,35 @@ mt6580_fb_base(boolean_t pre_vm)
 	return (volatile uint32_t *)fb_va;
 }
 
+static uint64_t
+mt6580_read_cntpct(void)
+{
+	uint32_t lo, hi, hi2;
+
+	do {
+		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
+		    : "=r"(lo), "=r"(hi));
+		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
+		    : "=r"(lo), "=r"(hi2));
+	} while (hi != hi2);
+
+	return ((uint64_t)hi << 32) | lo;
+}
+
+static void
+mt6580_delay_ms(unsigned int ms)
+{
+	uint64_t start = mt6580_read_cntpct();
+	uint64_t ticks = ((uint64_t)MT6580_CNTFRQ * ms) / 1000;
+	uint32_t spins = 0;
+
+	while ((mt6580_read_cntpct() - start) < ticks) {
+		if (++spins > 0x10000000u) {
+			break;
+		}
+	}
+}
+
 static void
 mt6580_fb_fill(uint32_t color, boolean_t pre_vm)
 {
@@ -169,6 +198,13 @@ mt6580_fb_fill(uint32_t color, boolean_t pre_vm)
 	if (pre_vm) {
 		FlushPoC_Dcache();
 	}
+
+	/*
+	 * Bring-up only: leave each full-screen milestone visible long
+	 * enough to identify it on the panel.  The generic timer counter
+	 * is already running when LK enters XNU.
+	 */
+	mt6580_delay_ms(1000);
 }
 
 static void
