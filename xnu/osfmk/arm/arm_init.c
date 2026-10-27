@@ -550,8 +550,6 @@ arm_init(
 	PE_init_kprintf(FALSE);
 	mt6580_fb_fill(0xFF8000FF, FALSE);	/* PE_init_kprintf done */
 
-	mt6580_fb_stripes_test();		/* identify all marker colours */
-
 	serialmode = 0;                                                      /* Assume normal keyboard and console */
 	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) { /* Do we want a serial
 	                                                                      * keyboard and/or
@@ -607,13 +605,10 @@ arm_init(
 
 	PE_init_platform(TRUE, &BootCpuData);
 	mt6580_fb_text(0, 9, "platform(TRUE) ok", 0xFFFFFFFF, 0xFF000000);
-	mt6580_fb_mark(0xFF808080, 3, FALSE);	/* PE_init_platform(TRUE) done */
 	cpu_timebase_init(TRUE);
 	mt6580_fb_text(0, 10, "timebase ok", 0xFFFFFFFF, 0xFF000000);
-	mt6580_fb_mark(0xFF00FF80, 4, FALSE);	/* cpu_timebase_init done */
 	fiq_context_init(TRUE);
 	mt6580_fb_text(0, 11, "fiq ok", 0xFFFFFFFF, 0xFF000000);
-	mt6580_fb_mark(0xFF800000, 5, FALSE);	/* fiq_context_init done */
 
 
 	/*
@@ -623,15 +618,17 @@ arm_init(
 	 * function, we do not risk failing the check even though
 	 * we mutate the guard word during execution.
 	 */
-	__stack_chk_guard = (unsigned long)early_random();
-	/* Zero a byte of the protector to guard
-	 * against string vulnerabilities
+	/*
+	 * Bring-up: early_random() pulls in the corecrypto DRBG and is the
+	 * next thing after fiq_context_init().  Use a fixed nonzero guard
+	 * until the PRNG path is verified, so it cannot mask the real
+	 * machine_startup milestone.
 	 */
+	mt6580_fb_text(0, 12, "setting stack guard", 0xFFFFFFFF, 0xFF000000);
+	__stack_chk_guard = 0x5A5A1234UL;
 	__stack_chk_guard &= ~(0xFFULL << 8);
-	mt6580_fb_text(0, 12, "stack guard ok", 0xFFFFFFFF, 0xFF000000);
-	mt6580_fb_mark(0xFF008080, 6, FALSE);	/* stack protector ready */
-	mt6580_fb_text(0, 13, "machine_startup", 0xFFFFFFFF, 0xFF000000);
-	mt6580_fb_mark(0xFFFFFF00, 7, FALSE);	/* entering machine_startup */
+	mt6580_fb_text(0, 13, "stack guard ok", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 14, "machine_startup", 0xFFFFFFFF, 0xFF000000);
 	machine_startup(args);
 }
 
