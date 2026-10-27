@@ -159,9 +159,9 @@ mt6580_read_cntpct(void)
 
 	do {
 		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
-		    : "=r"(lo), "=r"(hi));
+		    : "=&r"(lo), "=&r"(hi));
 		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
-		    : "=r"(lo), "=r"(hi2));
+		    : "=&r"(lo), "=&r"(hi2));
 	} while (hi != hi2);
 
 	return ((uint64_t)hi << 32) | lo;
@@ -198,13 +198,6 @@ mt6580_fb_fill(uint32_t color, boolean_t pre_vm)
 	if (pre_vm) {
 		FlushPoC_Dcache();
 	}
-
-	/*
-	 * Bring-up only: leave each full-screen milestone visible long
-	 * enough to identify it on the panel.  The generic timer counter
-	 * is already running when LK enters XNU.
-	 */
-	mt6580_delay_ms(1000);
 }
 
 static void
@@ -225,6 +218,12 @@ mt6580_fb_mark(uint32_t color, unsigned int row, boolean_t pre_vm)
 	if (pre_vm) {
 		FlushPoC_Dcache();
 	}
+
+	/*
+	 * Bring-up only: hold each bottom bar so its colour can be
+	 * identified before the next milestone draws over it.
+	 */
+	mt6580_delay_ms(700);
 }
 #else
 static void
@@ -472,20 +471,21 @@ arm_init(
 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
 	}
 	PE_create_console();
+	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* PE_create_console done */
 
 	/* setup console output */
 	PE_init_printf(FALSE);
+	mt6580_fb_mark(0xFFFFFFFF, 1, FALSE);	/* PE_init_printf(FALSE) done */
 
 	/*
 	 * MT6580 bring-up: PE_create_console() only initializes the
-	 * framebuffer console.  vcattach() (via PE_init_printf(TRUE)) is
-	 * what allocates the text buffers and enables output.  Switch to
-	 * text mode first so vcattach() takes the graphics-console path.
+	 * framebuffer console.  The full vcattach() path also drives the
+	 * progress-meter/thread-call machinery, which is not ready this
+	 * early.  Enable just the text console instead.
 	 */
-	initialize_screen(NULL, kPETextMode);
-	PE_init_printf(TRUE);
-	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* console enabled */
-	mt6580_fb_mark(0xFFFFFFFF, 1, FALSE);	/* PE_init_printf done */
+	vc_early_enable();
+	mt6580_fb_mark(0xFF00FF00, 2, FALSE);	/* early console enabled */
+	kprintf("MT6580: early framebuffer console enabled\n");
 
 #if __arm64__
 #if DEBUG
@@ -501,11 +501,11 @@ arm_init(
 #endif
 
 	PE_init_platform(TRUE, &BootCpuData);
-	mt6580_fb_mark(0xFF808080, 2, FALSE);	/* PE_init_platform(TRUE) done */
+	mt6580_fb_mark(0xFF808080, 3, FALSE);	/* PE_init_platform(TRUE) done */
 	cpu_timebase_init(TRUE);
-	mt6580_fb_mark(0xFF00FF80, 3, FALSE);	/* cpu_timebase_init done */
+	mt6580_fb_mark(0xFF00FF80, 4, FALSE);	/* cpu_timebase_init done */
 	fiq_context_init(TRUE);
-	mt6580_fb_mark(0xFF800000, 4, FALSE);	/* fiq_context_init done */
+	mt6580_fb_mark(0xFF800000, 5, FALSE);	/* fiq_context_init done */
 
 
 	/*
@@ -520,8 +520,8 @@ arm_init(
 	 * against string vulnerabilities
 	 */
 	__stack_chk_guard &= ~(0xFFULL << 8);
-	mt6580_fb_mark(0xFF008080, 5, FALSE);	/* stack protector ready */
-	mt6580_fb_mark(0xFFFFFF00, 6, FALSE);	/* entering machine_startup */
+	mt6580_fb_mark(0xFF008080, 6, FALSE);	/* stack protector ready */
+	mt6580_fb_mark(0xFFFFFF00, 7, FALSE);	/* entering machine_startup */
 	machine_startup(args);
 }
 

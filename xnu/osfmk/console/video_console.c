@@ -3094,6 +3094,31 @@ vcattach(void)
 	}
 }
 
+/*
+ * MT6580 bring-up: enable only the text console.
+ *
+ * vcattach() also initializes the progress-meter/thread-call machinery,
+ * which is not ready this early in arm_init().  PE_create_console() has
+ * already filled in gc_ops and vinfo, so we can allocate the text buffers
+ * and turn on the console directly.
+ */
+void
+vc_early_enable(void)
+{
+	if (!gc_initialized || gc_ops.enable == NULL) {
+		return;
+	}
+
+	vm_initialized = TRUE;
+	gc_graphics_boot = FALSE;
+	gc_desire_text = TRUE;
+
+	if (!gc_acquired) {
+		gc_enable(TRUE);
+		gc_acquired = TRUE;
+	}
+}
+
 #if !CONFIG_EMBEDDED
 
 // redraw progress meter between pixels x1, x2, position at x3

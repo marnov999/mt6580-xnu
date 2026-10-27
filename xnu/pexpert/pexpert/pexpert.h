@@ -273,6 +273,8 @@ typedef struct PE_Video       PE_Video;
 
 extern void initialize_screen(PE_Video *, unsigned int);
 
+extern void vc_early_enable(void);
+
 extern void dim_screen(void);
 
 extern int PE_current_console(
