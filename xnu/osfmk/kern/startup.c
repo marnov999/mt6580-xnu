@@ -250,6 +250,13 @@ kernel_early_bootstrap(void)
 extern boolean_t IORamDiskBSDRoot(void);
 extern kern_return_t cpm_preallocate_early(void);
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_printf(unsigned int row, const char *s);
+#define MT6580_BOOT_LINE(row, text)	mt6580_early_printf((row), (text))
+#else
+#define MT6580_BOOT_LINE(row, text)	do { } while (0)
+#endif
+
 void
 kernel_bootstrap(void)
 {
@@ -257,6 +264,7 @@ kernel_bootstrap(void)
 	thread_t	thread;
 	char		namep[16];
 
+	MT6580_BOOT_LINE(15, "kernel_bootstrap");
 	printf("%s\n", version); /* log kernel version */
 
 	if (PE_parse_boot_argn("-l", namep, sizeof (namep))) /* leaks logging */
@@ -272,12 +280,14 @@ kernel_bootstrap(void)
 
 	kernel_bootstrap_log("vm_mem_bootstrap");
 	vm_mem_bootstrap();
+	MT6580_BOOT_LINE(16, "vm_mem_bootstrap ok");
 
 	kernel_bootstrap_log("cs_init");
 	cs_init();
 
 	kernel_bootstrap_log("vm_mem_init");
 	vm_mem_init();
+	MT6580_BOOT_LINE(17, "vm_mem_init ok");
 
 	machine_info.memory_size = (uint32_t)mem_size;
 	machine_info.max_mem = max_mem;
@@ -308,12 +318,14 @@ kernel_bootstrap(void)
 
 	kernel_bootstrap_log("console_init");
 	console_init();
+	MT6580_BOOT_LINE(18, "console_init ok");
 
 	kernel_bootstrap_log("stackshot_init");
 	stackshot_init();
 
 	kernel_bootstrap_log("sched_init");
 	sched_init();
+	MT6580_BOOT_LINE(19, "sched_init ok");
 
 	kernel_bootstrap_log("ltable_bootstrap");
 	ltable_bootstrap();
@@ -347,6 +359,7 @@ kernel_bootstrap(void)
 
 	kernel_bootstrap_log("clock_init");
 	clock_init();
+	MT6580_BOOT_LINE(20, "clock_init ok");
 
 	ledger_init();
 
@@ -547,8 +560,10 @@ kernel_bootstrap_thread(void)
 #endif
 
 #ifdef	IOKIT
+	MT6580_BOOT_LINE(21, "PE_init_iokit");
 	kernel_bootstrap_log("PE_init_iokit");
 	PE_init_iokit();
+	MT6580_BOOT_LINE(22, "PE_init_iokit ok");
 #endif
 
 	assert(ml_get_interrupts_enabled() == FALSE);

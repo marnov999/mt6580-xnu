@@ -2795,6 +2795,18 @@ vc_initialize(__unused struct vc_info * vinfo_p)
 void
 initialize_screen(PE_Video * boot_vinfo, unsigned int op)
 {
+#if defined(ARM_BOARD_CONFIG_MT6580)
+	/*
+	 * MT6580 bring-up: the early direct framebuffer console owns the
+	 * visible page.  The generic console's geometry/progress path still
+	 * corrupts it, so keep initialize_screen() out of the panel until
+	 * that path is fixed.
+	 */
+	(void)boot_vinfo;
+	(void)op;
+	return;
+#endif
+
 	unsigned int newMapSize = 0;
 	vm_offset_t newVideoVirt = 0;
 	boolean_t graphics_now;
@@ -3045,6 +3057,16 @@ void vcattach(void); /* XXX gcc 4 warning cleanup */
 void
 vcattach(void)
 {
+#if defined(ARM_BOARD_CONFIG_MT6580)
+	/*
+	 * MT6580 bring-up: the early direct framebuffer console is already
+	 * active.  vcattach() starts the progress-meter drawing, which does
+	 * not understand the BOOT_MENU_LAYER geometry yet and scribbles over
+	 * the panel.  Keep it off until the video-console path is fixed.
+	 */
+	return;
+#endif
+
 	vm_initialized = TRUE;
 
 #if !CONFIG_EMBEDDED

@@ -315,6 +315,16 @@ mt6580_fb_text(unsigned int col, unsigned int row, const char *s,
 		s++;
 	}
 }
+
+/*
+ * Called from kernel_bootstrap() so progress remains visible after the
+ * direct early console has handed control to the generic kernel.
+ */
+void
+mt6580_early_printf(unsigned int row, const char *s)
+{
+	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
+}
 #else
 static void
 mt6580_fb_fill(__unused uint32_t color, __unused boolean_t pre_vm)
@@ -340,6 +350,11 @@ mt6580_fb_clear(__unused uint32_t color)
 static void
 mt6580_fb_text(__unused unsigned int col, __unused unsigned int row,
     __unused const char *s, __unused uint32_t fg, __unused uint32_t bg)
+{
+}
+
+void
+mt6580_early_printf(__unused unsigned int row, __unused const char *s)
 {
 }
 #endif /* ARM_BOARD_CLASS_MT6580 */
