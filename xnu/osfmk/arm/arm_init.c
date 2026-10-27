@@ -223,7 +223,32 @@ mt6580_fb_mark(uint32_t color, unsigned int row, boolean_t pre_vm)
 	 * Bring-up only: hold each bottom bar so its colour can be
 	 * identified before the next milestone draws over it.
 	 */
-	mt6580_delay_ms(700);
+	mt6580_delay_ms(1500);
+}
+
+/*
+ * Draw the complete marker palette once, slowly, before any console
+ * setup.  This lets the panel show the colours even if the console
+ * enable path faults afterwards.
+ */
+static void
+mt6580_fb_stripes_test(void)
+{
+	static const uint32_t colors[8] = {
+		0xFFFF00FF,	/* magenta */
+		0xFFFFFFFF,	/* white */
+		0xFF00FF00,	/* green */
+		0xFF808080,	/* gray */
+		0xFF00FF80,	/* spring green */
+		0xFF800000,	/* maroon */
+		0xFF008080,	/* teal */
+		0xFFFFFF00	/* yellow */
+	};
+	unsigned int i;
+
+	for (i = 0; i < 8; i++) {
+		mt6580_fb_mark(colors[i], i, FALSE);
+	}
 }
 #else
 static void
@@ -234,6 +259,11 @@ mt6580_fb_fill(__unused uint32_t color, __unused boolean_t pre_vm)
 static void
 mt6580_fb_mark(__unused uint32_t color, __unused unsigned int row,
     __unused boolean_t pre_vm)
+{
+}
+
+static void
+mt6580_fb_stripes_test(void)
 {
 }
 #endif /* ARM_BOARD_CLASS_MT6580 */
@@ -444,6 +474,8 @@ arm_init(
 	PE_init_kprintf(FALSE);
 	mt6580_fb_fill(0xFF8000FF, FALSE);	/* PE_init_kprintf done */
 
+	mt6580_fb_stripes_test();		/* identify all marker colours */
+
 	kprintf("kprintf initialized\n");
 
 	serialmode = 0;                                                      /* Assume normal keyboard and console */
@@ -484,8 +516,8 @@ arm_init(
 	 * early.  Enable just the text console instead.
 	 */
 	vc_early_enable();
-	mt6580_fb_mark(0xFF00FF00, 2, FALSE);	/* early console enabled */
-	kprintf("MT6580: early framebuffer console enabled\n");
+	mt6580_fb_mark(0xFF0000FF, 0, FALSE);	/* early console enabled */
+	printf("MT6580: early framebuffer console enabled\n");
 
 #if __arm64__
 #if DEBUG
