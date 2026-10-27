@@ -314,6 +314,46 @@ entropy_buffer_read(void *buffer, size_t *count)
  *    is re-filled with kernel-harvested entropy and the ccdbrg_reseed method is
  *    called with this new entropy. The kernel panics if a reseed fails.
  */
+#if defined(ARM_BOARD_CONFIG_MT6580)
+/*
+ * MT6580 bring-up: the corecrypto DRBG path is not ready yet, and
+ * early_random() is called from vm_mem_bootstrap() and zp_init() before
+ * the full PRNG setup.  Use the generic timer counter plus a mixing
+ * counter so the VM/zalloc bring-up can proceed.  Replace this with the
+ * real DRBG once its entropy path is verified.
+ */
+static uint64_t mt6580_random_state = 0x5A5A5A5A5A5A5A5AULL;
+
+static uint64_t
+mt6580_random_cntpct(void)
+{
+	uint32_t lo, hi, hi2;
+
+	do {
+		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
+		    : "=&r"(lo), "=&r"(hi));
+		__asm__ volatile("mrrc p15, 0, %0, %1, c14"
+		    : "=&r"(lo), "=&r"(hi2));
+	} while (hi != hi2);
+
+	return ((uint64_t)hi << 32) | lo;
+}
+
+uint64_t
+early_random(void)
+{
+	uint64_t x = mt6580_random_cntpct() ^ mt6580_random_state;
+
+	x ^= x >> 33;
+	x *= 0xff51afd7ed558ccdULL;
+	x ^= x >> 33;
+	x *= 0xc4ceb9fe1a85ec53ULL;
+	x ^= x >> 33;
+
+	mt6580_random_state += 0x9E3779B97F4A7C15ULL;
+	return x;
+}
+#else
 uint64_t
 early_random(void)
 {
@@ -375,6 +415,7 @@ early_random(void)
 
 	return result;
 }
+#endif /* ARM_BOARD_CONFIG_MT6580 */
 
 static void
 read_erandom(void *buffer, u_int numBytes)

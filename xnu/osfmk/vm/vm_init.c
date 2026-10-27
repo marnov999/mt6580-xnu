@@ -108,6 +108,13 @@ vm_mem_bootstrap_log(const char *message)
 	kernel_debug_string_early(message);
 }
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_printf(unsigned int row, const char *s);
+#define MT6580_VM_LINE(row, text)\tmt6580_early_printf((row), (text))
+#else
+#define MT6580_VM_LINE(row, text)\tdo { } while (0)
+#endif
+
 /*
  *	vm_mem_bootstrap initializes the virtual memory system.
  *	This is done only by the first cpu up.
@@ -144,27 +151,37 @@ vm_mem_bootstrap(void)
 	 *	From here on, all physical memory is accounted for,
 	 *	and we use only virtual addresses.
 	 */
+	MT6580_VM_LINE(23, "vm_mem_bootstrap");
 	vm_mem_bootstrap_log("vm_page_bootstrap");
 	vm_page_bootstrap(&start, &end);
+	MT6580_VM_LINE(24, "vm_page_bootstrap ok");
 
 	/*
 	 *	Initialize other VM packages
 	 */
 
+	MT6580_VM_LINE(25, "zone_bootstrap");
 	vm_mem_bootstrap_log("zone_bootstrap");
 	zone_bootstrap();
+	MT6580_VM_LINE(26, "zone_bootstrap ok");
 
+	MT6580_VM_LINE(27, "vm_object_bootstrap");
 	vm_mem_bootstrap_log("vm_object_bootstrap");
 	vm_object_bootstrap();
+	MT6580_VM_LINE(28, "vm_object_bootstrap ok");
 
 	vm_kernel_ready = TRUE;
 
+	MT6580_VM_LINE(29, "vm_map_init");
 	vm_mem_bootstrap_log("vm_map_init");
 	vm_map_init();
+	MT6580_VM_LINE(30, "vm_map_init ok");
 
+	MT6580_VM_LINE(31, "kmem_init");
 	vm_mem_bootstrap_log("kmem_init");
 	kmem_init(start, end);
 	kmem_ready = TRUE;
+	MT6580_VM_LINE(32, "kmem_init ok");
 	/*
 	 * Eat a random amount of kernel_map to fuzz subsequent heap, zone and
 	 * stack addresses. (With a 4K page and 9 bits of randomness, this
@@ -185,8 +202,10 @@ vm_mem_bootstrap(void)
 			   sizeof (log_executable_mem_entry));
 #endif /* CONFIG_EMBEDDED */
 
+	MT6580_VM_LINE(33, "pmap_init");
 	vm_mem_bootstrap_log("pmap_init");
 	pmap_init();
+	MT6580_VM_LINE(34, "pmap_init ok");
 	
 	kmem_alloc_ready = TRUE;
 
@@ -230,9 +249,11 @@ vm_mem_bootstrap(void)
 	vm_mem_bootstrap_log("kext_alloc_init");
 	kext_alloc_init();
 
+	MT6580_VM_LINE(35, "zone_init");
 	vm_mem_bootstrap_log("zone_init");
 	assert((vm_size_t) zsize == zsize);
 	zone_init((vm_size_t) zsize);	/* Allocate address space for zones */
+	MT6580_VM_LINE(36, "zone_init ok");
 
 	/* The vm_page_zone must be created prior to kalloc_init; that
 	 * routine can trigger zalloc()s (for e.g. mutex statistic structure
@@ -261,6 +282,7 @@ vm_mem_bootstrap(void)
 	vm_paging_map_init();
 
 	vm_mem_bootstrap_log("vm_mem_bootstrap done");
+	MT6580_VM_LINE(37, "vm_mem_bootstrap done");
 }
 
 void
