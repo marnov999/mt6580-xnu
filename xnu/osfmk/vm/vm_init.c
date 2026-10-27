@@ -110,9 +110,9 @@ vm_mem_bootstrap_log(const char *message)
 
 #if defined(ARM_BOARD_CONFIG_MT6580)
 extern void mt6580_early_printf(unsigned int row, const char *s);
-#define MT6580_VM_LINE(row, text)\tmt6580_early_printf((row), (text))
+#define MT6580_VM_LINE(row, text) mt6580_early_printf((row), (text))
 #else
-#define MT6580_VM_LINE(row, text)\tdo { } while (0)
+#define MT6580_VM_LINE(row, text) do { } while (0)
 #endif
 
 /*
