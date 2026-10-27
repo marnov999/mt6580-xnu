@@ -86,6 +86,24 @@ L_start_cpu_0:
 	.align 2
 	.globl EXT(_start)
 LEXT(_start)
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/*
+	 * Bring-up only: the MMU and caches are still off here.  Paint the
+	 * top 100 rows of the visible BOOT_MENU_LAYER black so we can tell
+	 * whether the shim's jump reached the kernel entry at all.  The
+	 * shim's own test pattern starts with a red band, so black is a
+	 * unambiguous marker.  r0 (boot_args) is preserved.
+	 */
+	ldr		r4, =0xFFAC2000
+	ldr		r5, =0xFF000000
+	ldr		r7, =45200
+	mov		r6, #0
+1:
+	str		r5, [r4, r6, lsl #2]
+	add		r6, r6, #1
+	cmp		r6, r7
+	bne		1b
+#endif
 	// r0 has the boot-args pointer 
 	// r1 set to zero
 	mov		r1, #0

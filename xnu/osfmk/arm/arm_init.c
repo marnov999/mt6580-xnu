@@ -138,26 +138,48 @@ extern boolean_t force_immediate_debug_halt;
 #define MT6580_FB_WIDTH		452u
 #define MT6580_FB_MARK_Y	832u
 
+static volatile uint32_t *
+mt6580_fb_base(boolean_t pre_vm)
+{
+	static vm_offset_t fb_va = 0;
+
+	if (pre_vm) {
+		return (volatile uint32_t *)MT6580_FB_PHYS;
+	}
+	if (fb_va == 0) {
+		fb_va = io_map_spec(MT6580_FB_PHYS, 0x200000u, VM_WIMG_IO);
+	}
+	return (volatile uint32_t *)fb_va;
+}
+
+static void
+mt6580_fb_fill(uint32_t color, boolean_t pre_vm)
+{
+	volatile uint32_t *fb = mt6580_fb_base(pre_vm);
+	unsigned int x, y;
+
+	if (fb == 0) {
+		return;
+	}
+	for (y = 0; y < 960; y++) {
+		for (x = 0; x < MT6580_FB_WIDTH; x++) {
+			fb[y * MT6580_FB_WIDTH + x] = color;
+		}
+	}
+	if (pre_vm) {
+		FlushPoC_Dcache();
+	}
+}
+
 static void
 mt6580_fb_mark(uint32_t color, unsigned int row, boolean_t pre_vm)
 {
-	volatile uint32_t *fb;
-	static vm_offset_t fb_va = 0;
+	volatile uint32_t *fb = mt6580_fb_base(pre_vm);
 	unsigned int x, y;
 
-	if (pre_vm) {
-		fb = (volatile uint32_t *)MT6580_FB_PHYS;
-	} else {
-		if (fb_va == 0) {
-			fb_va = io_map_spec(MT6580_FB_PHYS, 0x200000u,
-			    VM_WIMG_IO);
-		}
-		if (fb_va == 0) {
-			return;
-		}
-		fb = (volatile uint32_t *)fb_va;
+	if (fb == 0) {
+		return;
 	}
-
 	for (y = MT6580_FB_MARK_Y + row * 16;
 	    y < MT6580_FB_MARK_Y + (row + 1) * 16; y++) {
 		for (x = 0; x < MT6580_FB_WIDTH; x++) {
@@ -169,6 +191,11 @@ mt6580_fb_mark(uint32_t color, unsigned int row, boolean_t pre_vm)
 	}
 }
 #else
+static void
+mt6580_fb_fill(__unused uint32_t color, __unused boolean_t pre_vm)
+{
+}
+
 static void
 mt6580_fb_mark(__unused uint32_t color, __unused unsigned int row,
     __unused boolean_t pre_vm)
@@ -200,7 +227,7 @@ arm_init(
 	thread_t        thread;
 	processor_t     my_master_proc;
 
-	mt6580_fb_mark(0xFFFF0000, 0, TRUE);	/* arm_init entered */
+	mt6580_fb_fill(0xFFFF0000, TRUE);	/* arm_init entered */
 
 	/* If kernel integrity is supported, use a constant copy of the boot args. */
 	const_boot_args = *args;
@@ -209,7 +236,7 @@ arm_init(
 	cpu_data_init(&BootCpuData);
 
 	PE_init_platform(FALSE, args);	/* Get platform expert set up */
-	mt6580_fb_mark(0xFFFFFF00, 1, TRUE);	/* PE_init_platform(FALSE) done */
+	mt6580_fb_fill(0xFFFFFF00, TRUE);	/* PE_init_platform(FALSE) done */
 
 #if __arm64__
 	{
@@ -268,7 +295,7 @@ arm_init(
 #endif
 
 	ml_parse_cpu_topology();
-	mt6580_fb_mark(0xFF00FF00, 2, TRUE);	/* cpu topology parsed */
+	mt6580_fb_fill(0xFF00FF00, TRUE);	/* cpu topology parsed */
 
 	master_cpu = ml_get_boot_cpu_number();
 	assert(master_cpu >= 0 && master_cpu <= ml_get_max_cpu_number());
@@ -361,9 +388,9 @@ arm_init(
 	__builtin_arm_wsr("pan", 1);
 #endif  /* __ARM_PAN_AVAILABLE__ */
 
-	mt6580_fb_mark(0xFFFF8000, 2, TRUE);	/* entering arm_vm_init */
+	mt6580_fb_fill(0xFFFF8000, TRUE);	/* entering arm_vm_init */
 	arm_vm_init(xmaxmem, args);
-	mt6580_fb_mark(0xFF00FFFF, 3, FALSE);	/* arm_vm_init done */
+	mt6580_fb_fill(0xFF00FFFF, FALSE);	/* arm_vm_init done */
 
 	uint32_t debugmode;
 	if (PE_parse_boot_argn("debug", &debugmode, sizeof(debugmode)) &&
@@ -380,7 +407,7 @@ arm_init(
 
 	/* setup debugging output if one has been chosen */
 	PE_init_kprintf(FALSE);
-	mt6580_fb_mark(0xFF0000FF, 4, FALSE);	/* PE_init_kprintf done */
+	mt6580_fb_fill(0xFF8000FF, FALSE);	/* PE_init_kprintf done */
 
 	kprintf("kprintf initialized\n");
 
@@ -409,11 +436,11 @@ arm_init(
 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
 	}
 	PE_create_console();
-	mt6580_fb_mark(0xFFFF00FF, 5, FALSE);	/* PE_create_console done */
+	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* PE_create_console done */
 
 	/* setup console output */
 	PE_init_printf(FALSE);
-	mt6580_fb_mark(0xFFFFFFFF, 6, FALSE);	/* PE_init_printf done */
+	mt6580_fb_mark(0xFFFFFFFF, 1, FALSE);	/* PE_init_printf done */
 
 #if __arm64__
 #if DEBUG
@@ -429,7 +456,7 @@ arm_init(
 #endif
 
 	PE_init_platform(TRUE, &BootCpuData);
-	mt6580_fb_mark(0xFF808080, 7, FALSE);	/* PE_init_platform(TRUE) done */
+	mt6580_fb_mark(0xFF808080, 2, FALSE);	/* PE_init_platform(TRUE) done */
 	cpu_timebase_init(TRUE);
 	fiq_context_init(TRUE);
 
