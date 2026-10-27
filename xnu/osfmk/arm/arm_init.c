@@ -136,7 +136,10 @@ extern boolean_t force_immediate_debug_halt;
 #if defined(ARM_BOARD_CLASS_MT6580)
 #define MT6580_FB_PHYS		0xFFAC2000u
 #define MT6580_FB_WIDTH		452u
+#define MT6580_FB_HEIGHT	960u
 #define MT6580_FB_MARK_Y	832u
+
+extern unsigned char iso_font[256 * 16];
 
 static volatile uint32_t *
 mt6580_fb_base(boolean_t pre_vm)
@@ -250,6 +253,68 @@ mt6580_fb_stripes_test(void)
 		mt6580_fb_mark(colors[i], i, FALSE);
 	}
 }
+
+/*
+ * Minimal direct framebuffer console.  The generic video console needs
+ * PE_state.video to be encoded exactly as iBoot does; until that is fixed
+ * it scribbles over the visible page.  These helpers write page 1 directly
+ * with the known 452x960, 32-bpp, 1808-byte-pitch layout.
+ */
+static void
+mt6580_fb_clear(uint32_t color)
+{
+	volatile uint32_t *fb = mt6580_fb_base(FALSE);
+	unsigned int i;
+
+	if (fb == 0) {
+		return;
+	}
+	for (i = 0; i < MT6580_FB_WIDTH * MT6580_FB_HEIGHT; i++) {
+		fb[i] = color;
+	}
+}
+
+static void
+mt6580_fb_char(unsigned int col, unsigned int row, unsigned char ch,
+    uint32_t fg, uint32_t bg)
+{
+	volatile uint32_t *fb = mt6580_fb_base(FALSE);
+	unsigned char *glyph;
+	unsigned int x, y;
+	unsigned int px = col * 8;
+	unsigned int py = row * 16;
+
+	if (fb == 0 || px + 8 > MT6580_FB_WIDTH ||
+	    py + 16 > MT6580_FB_HEIGHT) {
+		return;
+	}
+
+	glyph = iso_font + ((unsigned int)ch * 16);
+	for (y = 0; y < 16; y++) {
+		unsigned char bits = glyph[y];
+
+		for (x = 0; x < 8; x++) {
+			fb[(py + y) * MT6580_FB_WIDTH + px + x] =
+			    (bits & (1u << x)) ? fg : bg;
+		}
+	}
+}
+
+static void
+mt6580_fb_text(unsigned int col, unsigned int row, const char *s,
+    uint32_t fg, uint32_t bg)
+{
+	while (*s != '\0') {
+		if (*s == '\n') {
+			col = 0;
+			row++;
+		} else {
+			mt6580_fb_char(col, row, (unsigned char)*s, fg, bg);
+			col++;
+		}
+		s++;
+	}
+}
 #else
 static void
 mt6580_fb_fill(__unused uint32_t color, __unused boolean_t pre_vm)
@@ -264,6 +329,17 @@ mt6580_fb_mark(__unused uint32_t color, __unused unsigned int row,
 
 static void
 mt6580_fb_stripes_test(void)
+{
+}
+
+static void
+mt6580_fb_clear(__unused uint32_t color)
+{
+}
+
+static void
+mt6580_fb_text(__unused unsigned int col, __unused unsigned int row,
+    __unused const char *s, __unused uint32_t fg, __unused uint32_t bg)
 {
 }
 #endif /* ARM_BOARD_CLASS_MT6580 */
@@ -476,8 +552,6 @@ arm_init(
 
 	mt6580_fb_stripes_test();		/* identify all marker colours */
 
-	kprintf("kprintf initialized\n");
-
 	serialmode = 0;                                                      /* Assume normal keyboard and console */
 	if (PE_parse_boot_argn("serial", &serialmode, sizeof(serialmode))) { /* Do we want a serial
 	                                                                      * keyboard and/or
@@ -502,22 +576,21 @@ arm_init(
 		(void)switch_to_serial_console(); /* Switch into serial mode */
 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
 	}
-	PE_create_console();
-	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* PE_create_console done */
-
-	/* setup console output */
-	PE_init_printf(FALSE);
-	mt6580_fb_mark(0xFFFFFFFF, 1, FALSE);	/* PE_init_printf(FALSE) done */
-
 	/*
-	 * MT6580 bring-up: PE_create_console() only initializes the
-	 * framebuffer console.  The full vcattach() path also drives the
-	 * progress-meter/thread-call machinery, which is not ready this
-	 * early.  Enable just the text console instead.
+	 * MT6580 bring-up: use a direct framebuffer text console instead
+	 * of PE_create_console()/vcattach().  The generic console's
+	 * PE_state.video depth/pitch does not match the visible layer yet,
+	 * so it scribbles over the panel.  The direct writer uses the known
+	 * 452x960, 32-bpp, 1808-byte-pitch BOOT_MENU_LAYER.
 	 */
-	vc_early_enable();
-	mt6580_fb_mark(0xFF0000FF, 0, FALSE);	/* early console enabled */
-	printf("MT6580: early framebuffer console enabled\n");
+	mt6580_fb_clear(0xFF000000);
+	mt6580_fb_text(0, 0, "MT6580 XNU 4570.71.2", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 1, "direct framebuffer console", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 3, "arm_init entered", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 4, "platform(FALSE) ok", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 5, "arm_vm_init ok", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 6, "PE_init_kprintf ok", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_text(0, 8, "waiting for platform(TRUE)", 0xFFFFFFFF, 0xFF000000);
 
 #if __arm64__
 #if DEBUG
@@ -533,10 +606,13 @@ arm_init(
 #endif
 
 	PE_init_platform(TRUE, &BootCpuData);
+	mt6580_fb_text(0, 9, "platform(TRUE) ok", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_mark(0xFF808080, 3, FALSE);	/* PE_init_platform(TRUE) done */
 	cpu_timebase_init(TRUE);
+	mt6580_fb_text(0, 10, "timebase ok", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_mark(0xFF00FF80, 4, FALSE);	/* cpu_timebase_init done */
 	fiq_context_init(TRUE);
+	mt6580_fb_text(0, 11, "fiq ok", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_mark(0xFF800000, 5, FALSE);	/* fiq_context_init done */
 
 
@@ -552,7 +628,9 @@ arm_init(
 	 * against string vulnerabilities
 	 */
 	__stack_chk_guard &= ~(0xFFULL << 8);
+	mt6580_fb_text(0, 12, "stack guard ok", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_mark(0xFF008080, 6, FALSE);	/* stack protector ready */
+	mt6580_fb_text(0, 13, "machine_startup", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_mark(0xFFFFFF00, 7, FALSE);	/* entering machine_startup */
 	machine_startup(args);
 }
