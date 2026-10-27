@@ -478,6 +478,16 @@ gc_enable( boolean_t enable )
 
 		gc_reset_screen();
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+		/*
+		 * MT6580 bring-up: the generic console has no default
+		 * foreground/background colour, so text is black on black.
+		 * Use white on black for the early boot console.
+		 */
+		gc_update_color(7, TRUE);
+		gc_update_color(0, FALSE);
+#endif
+
 		VCPUTC_LOCK_UNLOCK( );
 		splx( s );
 

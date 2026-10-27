@@ -436,10 +436,19 @@ arm_init(
 		disableConsoleOutput = FALSE;     /* Allow printfs to happen */
 	}
 	PE_create_console();
-	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* PE_create_console done */
 
 	/* setup console output */
 	PE_init_printf(FALSE);
+
+	/*
+	 * MT6580 bring-up: PE_create_console() only initializes the
+	 * framebuffer console.  vcattach() (via PE_init_printf(TRUE)) is
+	 * what allocates the text buffers and enables output.  Switch to
+	 * text mode first so vcattach() takes the graphics-console path.
+	 */
+	initialize_screen(NULL, kPETextMode);
+	PE_init_printf(TRUE);
+	mt6580_fb_mark(0xFFFF00FF, 0, FALSE);	/* console enabled */
 	mt6580_fb_mark(0xFFFFFFFF, 1, FALSE);	/* PE_init_printf done */
 
 #if __arm64__
@@ -458,7 +467,9 @@ arm_init(
 	PE_init_platform(TRUE, &BootCpuData);
 	mt6580_fb_mark(0xFF808080, 2, FALSE);	/* PE_init_platform(TRUE) done */
 	cpu_timebase_init(TRUE);
+	mt6580_fb_mark(0xFF00FF80, 3, FALSE);	/* cpu_timebase_init done */
 	fiq_context_init(TRUE);
+	mt6580_fb_mark(0xFF800000, 4, FALSE);	/* fiq_context_init done */
 
 
 	/*
@@ -473,6 +484,8 @@ arm_init(
 	 * against string vulnerabilities
 	 */
 	__stack_chk_guard &= ~(0xFFULL << 8);
+	mt6580_fb_mark(0xFF008080, 5, FALSE);	/* stack protector ready */
+	mt6580_fb_mark(0xFFFFFF00, 6, FALSE);	/* entering machine_startup */
 	machine_startup(args);
 }
 
