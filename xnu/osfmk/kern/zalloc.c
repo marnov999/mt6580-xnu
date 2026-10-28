@@ -106,6 +106,13 @@
 
 #include <san/kasan.h>
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_sub(const char *s);
+#define MT6580_ZALLOC_SUB(text) mt6580_early_sub(text)
+#else
+#define MT6580_ZALLOC_SUB(text) do { } while (0)
+#endif
+
 /*
  *  ZONE_ALIAS_ADDR (deprecated)
  */
@@ -2735,9 +2742,13 @@ zone_bootstrap(void)
 		zalloc_debug = 0;
 
 	/* Set up zone element poisoning */
+	MT6580_ZALLOC_SUB("zb: zp_init");
 	zp_init();
+	MT6580_ZALLOC_SUB("zb: zp_init ok");
 
+	MT6580_ZALLOC_SUB("zb: random_bool_init");
 	random_bool_init(&zone_bool_gen);
+	MT6580_ZALLOC_SUB("zb: random_bool_init ok");
 
 	/* should zlog log to debug zone corruption instead of leaks? */
 	if (PE_parse_boot_argn("-zc", temp_buf, sizeof(temp_buf))) {
@@ -2769,14 +2780,20 @@ zone_bootstrap(void)
 	simple_lock_init(&zone_test_lock, 0);
 #endif /* DEBUG || DEVELOPMENT */
 
+	MT6580_ZALLOC_SUB("zb: thread_call_setup");
 	thread_call_setup(&call_async_alloc, zalloc_async, NULL);
+	MT6580_ZALLOC_SUB("zb: thread_call_setup ok");
 
 	/* initializing global lock group for zones */
+	MT6580_ZALLOC_SUB("zb: lck_grp_init");
 	lck_grp_attr_setdefault(&zone_locks_grp_attr);
 	lck_grp_init(&zone_locks_grp, "zone_locks", &zone_locks_grp_attr);
+	MT6580_ZALLOC_SUB("zb: lck_grp_init ok");
 
-	lck_attr_setdefault(&zone_metadata_lock_attr); 
+	MT6580_ZALLOC_SUB("zb: lck_mtx_init_ext");
+	lck_attr_setdefault(&zone_metadata_lock_attr);
 	lck_mtx_init_ext(&zone_metadata_region_lck, &zone_metadata_region_lck_ext, &zone_locks_grp, &zone_metadata_lock_attr);
+	MT6580_ZALLOC_SUB("zb: lck_mtx_init_ext ok");
 }
 
 /*

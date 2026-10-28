@@ -324,24 +324,82 @@ void
 mt6580_early_printf(unsigned int row, const char *s)
 {
 	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
+	/*
+	 * Bring-up only: hold the marker long enough for a 240 fps capture
+	 * to catch it.  The panel refreshes at ~60 Hz, so without this each
+	 * stage is replaced before it is ever scanned out.
+	 */
+	mt6580_delay_ms(120);
+}
+
+/*
+ * Highest text row drawn so far.  Rows are handed out monotonically by
+ * the boot stages (arm_init 0-14, kernel_bootstrap 15-22, vm_mem 23-52,
+ * kalloc 53-58), so this tracks the current stage and tells the panic
+ * mirror where it can write without erasing the marker that identifies
+ * the failing stage.
+ */
+static unsigned int mt6580_fb_max_row;
+
+void
+mt6580_early_printf(unsigned int row, const char *s)
+{
+	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
+	if (row > mt6580_fb_max_row) {
+		mt6580_fb_max_row = row;
+	}
+	/*
+	 * Bring-up only: hold the marker long enough for a 240 fps capture
+	 * to catch it.  The panel refreshes at ~60 Hz, so without this each
+	 * stage is replaced before it is ever scanned out.
+	 */
+	mt6580_delay_ms(120);
+}
+
+/*
+ * Sub-stage line.  Row 37 is the one row left free between the vm_mem
+ * markers, so a single line is reused and rewritten for each step inside
+ * a stage.  The row is cleared first because successive labels have
+ * different lengths.
+ */
+void
+mt6580_early_sub(const char *s)
+{
+	volatile uint32_t *fb = mt6580_fb_base(FALSE);
+	unsigned int x, y;
+
+	if (fb != 0) {
+		for (y = 37 * 16; y < 38 * 16; y++) {
+			for (x = 0; x < MT6580_FB_WIDTH; x++) {
+				fb[y * MT6580_FB_WIDTH + x] = 0xFF000000;
+			}
+		}
+	}
+	mt6580_fb_text(0, 37, s, 0xFFFFFF00, 0xFF000000);
+	mt6580_delay_ms(120);
 }
 
 /*
  * Panic mirror.  kprintf() is a no-op in this configuration, so a panic
  * and a hang are otherwise indistinguishable on the panel.  XNU calls
- * PE_arm_debug_panic_hook() early in panic_trap_to_debugger(); repaint
- * the whole panel with the message so the failure is visible.
+ * PE_arm_debug_panic_hook() early in panic_trap_to_debugger().
  *
- * The panel is 60 text rows tall (960/16) and rows 53-58 hold kalloc
- * markers, so the panic output owns the screen instead of appending.
+ * Write below the highest marker already drawn, so the progress lines
+ * that identify the failing stage survive.  The hook receives the panic
+ * format string, not the formatted result, so printf escapes such as %p
+ * appear literally.
  */
 static void
 mt6580_panic_display(const char *str)
 {
-	unsigned int row = 0;
+	unsigned int row = mt6580_fb_max_row + 1;
 	unsigned int col = 0;
 
-	mt6580_fb_clear(0xFF000000);
+	if (row + 2 >= MT6580_FB_HEIGHT / 16) {
+		/* Not enough room below the markers; start at the top. */
+		row = 0;
+	}
+
 	mt6580_fb_text(0, row++, "*** PANIC ***", 0xFFFF4040, 0xFF000000);
 
 	while (*str != '\0' && row < MT6580_FB_HEIGHT / 16) {
@@ -388,6 +446,11 @@ mt6580_fb_text(__unused unsigned int col, __unused unsigned int row,
 
 void
 mt6580_early_printf(__unused unsigned int row, __unused const char *s)
+{
+}
+
+void
+mt6580_early_sub(__unused const char *s)
 {
 }
 #endif /* ARM_BOARD_CLASS_MT6580 */

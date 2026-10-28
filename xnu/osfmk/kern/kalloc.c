@@ -81,9 +81,12 @@
 
 #if defined(ARM_BOARD_CONFIG_MT6580)
 extern void mt6580_early_printf(unsigned int row, const char *s);
+extern void mt6580_early_sub(const char *s);
 #define MT6580_KALLOC_LINE(row, text) mt6580_early_printf((row), (text))
+#define MT6580_KALLOC_SUB(text) mt6580_early_sub(text)
 #else
 #define MT6580_KALLOC_LINE(row, text) do { } while (0)
+#define MT6580_KALLOC_SUB(text) do { } while (0)
 #endif
 #include <sys/kdebug.h>
 
@@ -344,6 +347,8 @@ kalloc_init(
 	 */
 	MT6580_KALLOC_LINE(55, "kalloc: zinit");
 	for (int i = 0; i < MAX_K_ZONE && (size = k_zone_config[i].kzc_size) < kalloc_max; i++) {
+		/* Name the zone being created; it is short enough for one row. */
+		MT6580_KALLOC_SUB(k_zone_config[i].kzc_name);
 		k_zone[i] = zinit(size, size, size, k_zone_config[i].kzc_name);
 
 		/*
