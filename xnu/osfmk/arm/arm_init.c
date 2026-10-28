@@ -172,48 +172,68 @@ mt6580_read_cntpct(void)
 
 /*
  * MT6580 TOPRGU watchdog.  LK programs it before handing off to the shim,
- * and the shim's SHIM_KEEP_WDT build leaves it armed so a hung boot resets
- * the phone instead of leaving it stuck.  The marker holds below add about
- * two seconds of deliberate delay, which was enough to make the watchdog
- * fire before kmem_init() ever printed.  Pet it from the delay loop so the
- * timer still guards a real hang but does not cut a progressing boot short.
+ * and the shim leaves it armed so a hung boot resets the phone instead of
+ * leaving it stuck.  It is never disabled here -- only kicked.
  *
- * Only touched once arm_vm_init() has run and io_map_spec() is usable;
- * before that the physical address may not be mapped.
+ * The register page is mapped once, lazily, and cached.  Calling
+ * io_map_spec() repeatedly would leak kernel VA: before kernel_map exists
+ * the pre-VM path just bumps virtual_space_start.  Mapping it early also
+ * keeps petting cheap once the marker delays start running.
  */
-#define MT6580_WDT_RESTART	0x10007008u
+#define MT6580_TOPRGU_BASE	0x10007000u
+#define MT6580_WDT_MODE		(MT6580_TOPRGU_BASE + 0x00u)
+#define MT6580_WDT_RESTART	(MT6580_TOPRGU_BASE + 0x08u)
+#define MT6580_WDT_STATUS	(MT6580_TOPRGU_BASE + 0x0Cu)
 #define MT6580_WDT_PET		0x1971u
 
 static boolean_t mt6580_wdt_ready;
+static volatile uint32_t *mt6580_toprgu;
 
+/*
+ * Map the TOPRGU page and return its virtual base.  Returns NULL if the
+ * mapping could not be made.  Safe both before and after arm_vm_init().
+ */
+static volatile uint32_t *
+mt6580_toprgu_base(void)
+{
+	vm_offset_t va;
+
+	if (mt6580_toprgu != NULL) {
+		return mt6580_toprgu;
+	}
+	va = io_map_spec(MT6580_TOPRGU_BASE, 0x1000u, VM_WIMG_IO);
+	if (va == 0) {
+		return NULL;
+	}
+	mt6580_toprgu = (volatile uint32_t *)va;
+	return mt6580_toprgu;
+}
+
+/* Kick the watchdog.  No-op until the caller confirms the mapping works. */
 static void
 mt6580_wdt_pet(void)
 {
-	static volatile uint32_t *wdt;
-	vm_offset_t va;
+	volatile uint32_t *wdt;
 
 	if (!mt6580_wdt_ready) {
 		return;
 	}
-	if (wdt == NULL) {
-		/* io_map_spec() applies the page offset itself. */
-		va = io_map_spec(MT6580_WDT_RESTART, 4, VM_WIMG_IO);
-		if (va == 0) {
-			return;
-		}
-		wdt = (volatile uint32_t *)va;
+	wdt = mt6580_toprgu_base();
+	if (wdt != NULL) {
+		*(volatile uint32_t *)((uintptr_t)wdt +
+		    (MT6580_WDT_RESTART - MT6580_TOPRGU_BASE)) = MT6580_WDT_PET;
 	}
-	*wdt = MT6580_WDT_PET;
 }
 
 /*
  * Hold for the requested time, but never for more than a bounded number
  * of iterations.  If CNTPCT is not advancing (the generic timer may not
- * be counting down this early), the counter test alone would spin for
- * every iteration the guard allows -- seconds per marker, which is enough
- * to outlast the ~30s TOPRGU watchdog and reset the phone mid-boot.  The
- * guard below is sized so a stalled counter still returns in well under
- * a tenth of a second at 1.3GHz.
+ * be counting this early), the counter test alone decides when to stop,
+ * so every call would run to the guard.  At the previous 0x10000000
+ * guard that was ~2s per marker, and the 16 delayed markers before
+ * kmem_init add up to ~30s -- exactly the TOPRGU timeout, which is why
+ * the phone reset just after "vm_map_init ok".  The guard is now small
+ * enough that a stalled counter costs ~50-100ms per marker.
  */
 static void
 mt6580_delay_ms(unsigned int ms)
@@ -411,11 +431,51 @@ mt6580_fb_u64(unsigned int col, unsigned int row, uint64_t v)
 	}
 }
 
+static void
+mt6580_fb_hex(unsigned int col, unsigned int row, uint32_t v)
+{
+	static const char digits[] = "0123456789abcdef";
+	int i;
+
+	for (i = 7; i >= 0; i--) {
+		mt6580_fb_char(col++, row,
+		    (unsigned char)digits[(v >> (i * 4)) & 0xF],
+		    0xFF00FF00, 0xFF000000);
+	}
+}
+
+/*
+ * Show the watchdog mode and the latched reset status.  Used during
+ * bring-up to tell a watchdog reset apart from an exception: STATUS
+ * latches the reason for the previous reset.  Bit 31 (HWWDT_RST) means
+ * the last boot ended in a watchdog reset.
+ */
+static void
+mt6580_fb_wdt_status(void)
+{
+	volatile uint32_t *wdt = mt6580_toprgu_base();
+	uint32_t mode, status;
+
+	if (wdt == NULL) {
+		mt6580_fb_text(0, 2, "wdt map failed", 0xFFFF4040, 0xFF000000);
+		return;
+	}
+	mode = *(volatile uint32_t *)((uintptr_t)wdt +
+	    (MT6580_WDT_MODE - MT6580_TOPRGU_BASE));
+	status = *(volatile uint32_t *)((uintptr_t)wdt +
+	    (MT6580_WDT_STATUS - MT6580_TOPRGU_BASE));
+
+	mt6580_fb_text(0, 2, "wdt md=", 0xFF00FFFF, 0xFF000000);
+	mt6580_fb_hex(7, 2, mode);
+	mt6580_fb_text(16, 2, "st=", 0xFF00FFFF, 0xFF000000);
+	mt6580_fb_hex(19, 2, status);
+}
+
 /*
  * Draw the elapsed-milliseconds readout at the right end of a marker row,
  * so it never overwrites the stage label at column 0.  The panel is
  * 452px wide, so only columns 0-55 are drawable; keep the readout in
- * columns 44-51 to leave the label room.
+ * columns 44-49 to leave the label and the "ms" suffix room.
  */
 static void
 mt6580_fb_elapsed(unsigned int row)
@@ -548,6 +608,11 @@ mt6580_early_printf(__unused unsigned int row, __unused const char *s)
 
 void
 mt6580_early_sub(__unused const char *s)
+{
+}
+
+static void
+mt6580_fb_wdt_status(void)
 {
 }
 #endif /* ARM_BOARD_CLASS_MT6580 */
@@ -806,6 +871,7 @@ arm_init(
 #endif
 	mt6580_fb_text(0, 0, "MT6580 XNU 4570.71.2", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_text(0, 1, "direct framebuffer console", 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_wdt_status();
 	mt6580_fb_text(0, 3, "arm_init entered", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_text(0, 4, "platform(FALSE) ok", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_text(0, 5, "arm_vm_init ok", 0xFFFFFFFF, 0xFF000000);
