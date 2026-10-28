@@ -325,6 +325,39 @@ mt6580_early_printf(unsigned int row, const char *s)
 {
 	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
 }
+
+/*
+ * Panic mirror.  kprintf() is a no-op in this configuration, so a panic
+ * and a hang are otherwise indistinguishable on the panel.  XNU calls
+ * PE_arm_debug_panic_hook() early in panic_trap_to_debugger(); repaint
+ * the whole panel with the message so the failure is visible.
+ *
+ * The panel is 60 text rows tall (960/16) and rows 53-58 hold kalloc
+ * markers, so the panic output owns the screen instead of appending.
+ */
+static void
+mt6580_panic_display(const char *str)
+{
+	unsigned int row = 0;
+	unsigned int col = 0;
+
+	mt6580_fb_clear(0xFF000000);
+	mt6580_fb_text(0, row++, "*** PANIC ***", 0xFFFF4040, 0xFF000000);
+
+	while (*str != '\0' && row < MT6580_FB_HEIGHT / 16) {
+		if (*str == '\n' || col >= MT6580_FB_WIDTH / 8) {
+			col = 0;
+			row++;
+			if (*str == '\n') {
+				str++;
+			}
+			continue;
+		}
+		mt6580_fb_char(col++, row, (unsigned char)*str, 0xFFFFFFFF,
+		    0xFF000000);
+		str++;
+	}
+}
 #else
 static void
 mt6580_fb_fill(__unused uint32_t color, __unused boolean_t pre_vm)
@@ -597,6 +630,14 @@ arm_init(
 	 * 452x960, 32-bpp, 1808-byte-pitch BOOT_MENU_LAYER.
 	 */
 	mt6580_fb_clear(0xFF000000);
+#if defined(ARM_BOARD_CLASS_MT6580)
+	/*
+	 * Make panics visible on the panel.  kprintf() output is a no-op
+	 * here, so without this a panic in e.g. kalloc_init() looks
+	 * identical to a hang.
+	 */
+	PE_arm_debug_panic_hook = mt6580_panic_display;
+#endif
 	mt6580_fb_text(0, 0, "MT6580 XNU 4570.71.2", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_text(0, 1, "direct framebuffer console", 0xFFFFFFFF, 0xFF000000);
 	mt6580_fb_text(0, 3, "arm_init entered", 0xFFFFFFFF, 0xFF000000);
