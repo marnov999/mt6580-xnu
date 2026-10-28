@@ -351,6 +351,11 @@ mt6580_early_printf(unsigned int row, const char *s)
  * markers, so a single line is reused and rewritten for each step inside
  * a stage.  The row is cleared first because successive labels have
  * different lengths.
+ *
+ * Row 37 is deliberately kept out of mt6580_fb_max_row: the panic mirror
+ * writes at max_row + 1, and the sub-stage label is the single most
+ * useful thing to preserve, so it must never be the line just below the
+ * markers.
  */
 void
 mt6580_early_sub(const char *s)
