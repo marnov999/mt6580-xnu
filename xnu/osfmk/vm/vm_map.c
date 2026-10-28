@@ -112,6 +112,13 @@
 
 #include <san/kasan.h>
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_sub(const char *s);
+#define MT6580_MAP_SUB(text) mt6580_early_sub(text)
+#else
+#define MT6580_MAP_SUB(text) do { } while (0)
+#endif
+
 #if __arm64__
 extern int fourk_binary_compatibility_unsafe;
 extern int fourk_binary_compatibility_allow_wx;
@@ -1006,6 +1013,7 @@ vm_map_create(
 	result = (vm_map_t) zalloc(vm_map_zone);
 	if (result == VM_MAP_NULL)
 		panic("vm_map_create");
+	MT6580_MAP_SUB("vm_map_create: got map");
 
 	vm_map_first_entry(result) = vm_map_to_entry(result);
 	vm_map_last_entry(result)  = vm_map_to_entry(result);
@@ -1046,7 +1054,9 @@ vm_map_create(
  	result->jit_entry_exists = FALSE;
 
 	if (vm_map_supports_hole_optimization) {
+		MT6580_MAP_SUB("vm_map_create: holes zone");
 		hole_entry = zalloc(vm_map_holes_zone);
+		MT6580_MAP_SUB("vm_map_create: holes got");
 
 		hole_entry->start = min;
 #if defined(__arm__) || defined(__arm64__)

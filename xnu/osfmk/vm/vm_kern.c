@@ -84,6 +84,13 @@
 
 #include <san/kasan.h>
 
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_sub(const char *s);
+#define MT6580_KERN_SUB(text) mt6580_early_sub(text)
+#else
+#define MT6580_KERN_SUB(text) do { } while (0)
+#endif
+
 /*
  *	Variables exported by this module.
  */
@@ -1283,8 +1290,10 @@ kmem_init(
 				    VM_MAP_PAGE_MASK(kernel_map));
 
 #if	defined(__arm__) || defined(__arm64__)
+	MT6580_KERN_SUB("kmem: vm_map_create");
 	kernel_map = vm_map_create(pmap_kernel(),VM_MIN_KERNEL_AND_KEXT_ADDRESS,
 			    VM_MAX_KERNEL_ADDRESS, FALSE);
+	MT6580_KERN_SUB("kmem: vm_map_create ok");
 	/*
 	 *	Reserve virtual memory allocated up to this time.
 	 */
@@ -1296,7 +1305,7 @@ kmem_init(
 		kern_return_t kr;
 
 		while (pmap_virtual_region(region_select, &region_start, &region_size)) {
-
+			MT6580_KERN_SUB("kmem: vm_map_enter region");
 			map_addr = region_start;
 			kr = vm_map_enter(kernel_map, &map_addr,
 					  vm_map_round_page(region_size,
@@ -1316,8 +1325,9 @@ kmem_init(
 			}	
 
 			region_select++;
-		}	
+		}
 	}
+	MT6580_KERN_SUB("kmem: regions reserved");
 #else
 	kernel_map = vm_map_create(pmap_kernel(),VM_MIN_KERNEL_AND_KEXT_ADDRESS,
 			    map_end, FALSE);
