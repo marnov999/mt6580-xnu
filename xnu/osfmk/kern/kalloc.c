@@ -78,6 +78,13 @@
 #include <vm/vm_object.h>
 #include <vm/vm_map.h>
 #include <libkern/OSMalloc.h>
+
+#if defined(ARM_BOARD_CONFIG_MT6580)
+extern void mt6580_early_printf(unsigned int row, const char *s);
+#define MT6580_KALLOC_LINE(row, text) mt6580_early_printf((row), (text))
+#else
+#define MT6580_KALLOC_LINE(row, text) do { } while (0)
+#endif
 #include <sys/kdebug.h>
 
 #include <san/kasan.h>
@@ -300,12 +307,14 @@ kalloc_init(
 	vmk_flags = VM_MAP_KERNEL_FLAGS_NONE;
 	vmk_flags.vmkf_permanent = TRUE;
 
+	MT6580_KALLOC_LINE(53, "kalloc: suballoc");
 	retval = kmem_suballoc(kernel_map, &min, kalloc_map_size,
 			       FALSE,
 			       (VM_FLAGS_ANYWHERE),
 			       vmk_flags,
 			       VM_KERN_MEMORY_KALLOC,
 			       &kalloc_map);
+	MT6580_KALLOC_LINE(54, "kalloc: suballoc ok");
 
 	if (retval != KERN_SUCCESS)
 		panic("kalloc_init: kmem_suballoc failed");
@@ -333,6 +342,7 @@ kalloc_init(
 	/*
 	 * Allocate a zone for each size we are going to handle.
 	 */
+	MT6580_KALLOC_LINE(55, "kalloc: zinit");
 	for (int i = 0; i < MAX_K_ZONE && (size = k_zone_config[i].kzc_size) < kalloc_max; i++) {
 		k_zone[i] = zinit(size, size, size, k_zone_config[i].kzc_name);
 
@@ -346,6 +356,7 @@ kalloc_init(
 #endif
 		zone_change(k_zone[i], Z_KASAN_QUARANTINE, FALSE);
 	}
+	MT6580_KALLOC_LINE(56, "kalloc: zinit ok");
 
 	/*
 	 * Build the Direct LookUp Table for small allocations
@@ -404,9 +415,11 @@ kalloc_init(
 	}
 #endif
 
+	MT6580_KALLOC_LINE(57, "kalloc: lck");
 	lck_grp_init(&kalloc_lck_grp, "kalloc.large", LCK_GRP_ATTR_NULL);
 	lck_mtx_init(&kalloc_lock, &kalloc_lck_grp, LCK_ATTR_NULL);
 	OSMalloc_init();
+	MT6580_KALLOC_LINE(58, "kalloc done");
 #ifdef	MUTEX_ZONE
 	lck_mtx_zone = zinit(sizeof(struct _lck_mtx_), 1024*256, 4096, "lck_mtx");
 #endif
