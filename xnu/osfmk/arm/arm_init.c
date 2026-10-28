@@ -170,6 +170,51 @@ mt6580_read_cntpct(void)
 	return ((uint64_t)hi << 32) | lo;
 }
 
+/*
+ * MT6580 TOPRGU watchdog.  LK programs it before handing off to the shim,
+ * and the shim's SHIM_KEEP_WDT build leaves it armed so a hung boot resets
+ * the phone instead of leaving it stuck.  The marker holds below add about
+ * two seconds of deliberate delay, which was enough to make the watchdog
+ * fire before kmem_init() ever printed.  Pet it from the delay loop so the
+ * timer still guards a real hang but does not cut a progressing boot short.
+ *
+ * Only touched once arm_vm_init() has run and io_map_spec() is usable;
+ * before that the physical address may not be mapped.
+ */
+#define MT6580_WDT_RESTART	0x10007008u
+#define MT6580_WDT_PET		0x1971u
+
+static boolean_t mt6580_wdt_ready;
+
+static void
+mt6580_wdt_pet(void)
+{
+	static volatile uint32_t *wdt;
+	vm_offset_t va;
+
+	if (!mt6580_wdt_ready) {
+		return;
+	}
+	if (wdt == NULL) {
+		/* io_map_spec() applies the page offset itself. */
+		va = io_map_spec(MT6580_WDT_RESTART, 4, VM_WIMG_IO);
+		if (va == 0) {
+			return;
+		}
+		wdt = (volatile uint32_t *)va;
+	}
+	*wdt = MT6580_WDT_PET;
+}
+
+/*
+ * Hold for the requested time, but never for more than a bounded number
+ * of iterations.  If CNTPCT is not advancing (the generic timer may not
+ * be counting down this early), the counter test alone would spin for
+ * every iteration the guard allows -- seconds per marker, which is enough
+ * to outlast the ~30s TOPRGU watchdog and reset the phone mid-boot.  The
+ * guard below is sized so a stalled counter still returns in well under
+ * a tenth of a second at 1.3GHz.
+ */
 static void
 mt6580_delay_ms(unsigned int ms)
 {
@@ -178,8 +223,11 @@ mt6580_delay_ms(unsigned int ms)
 	uint32_t spins = 0;
 
 	while ((mt6580_read_cntpct() - start) < ticks) {
-		if (++spins > 0x10000000u) {
+		if (++spins > 0x800000u) {
 			break;
+		}
+		if ((spins & 0xFFFFu) == 0) {
+			mt6580_wdt_pet();
 		}
 	}
 }
@@ -328,13 +376,67 @@ mt6580_fb_text(unsigned int col, unsigned int row, const char *s,
  */
 static unsigned int mt6580_fb_max_row;
 
+/*
+ * Bring-up diagnostic: first CNTPCT value seen, so each marker can show
+ * the time elapsed since the direct console came up.  If this readout
+ * stays at zero across markers the generic timer is not counting, which
+ * also means every mt6580_delay_ms() call is running into its spin guard
+ * instead of timing out normally.
+ */
+static uint64_t mt6580_t0;
+
 void mt6580_early_printf(unsigned int row, const char *s);
 void mt6580_early_sub(const char *s);
+
+static void
+mt6580_fb_u64(unsigned int col, unsigned int row, uint64_t v)
+{
+	char buf[21];
+	int i = 0;
+
+	if (v == 0) {
+		buf[i++] = '0';
+	}
+	while (v != 0) {
+		buf[i++] = '0' + (char)(v % 10);
+		v /= 10;
+	}
+	/* Only six digits fit between column 44 and the "ms" suffix. */
+	while (i > 6) {
+		i--;
+	}
+	while (i > 0) {
+		mt6580_fb_char(col++, row, (unsigned char)buf[--i],
+		    0xFF00FF00, 0xFF000000);
+	}
+}
+
+/*
+ * Draw the elapsed-milliseconds readout at the right end of a marker row,
+ * so it never overwrites the stage label at column 0.  The panel is
+ * 452px wide, so only columns 0-55 are drawable; keep the readout in
+ * columns 44-51 to leave the label room.
+ */
+static void
+mt6580_fb_elapsed(unsigned int row)
+{
+	uint64_t now = mt6580_read_cntpct();
+	uint64_t ms;
+
+	ms = ((now - mt6580_t0) * 1000) / MT6580_CNTFRQ;
+	mt6580_fb_u64(44, row, ms);
+	mt6580_fb_char(50, row, 'm', 0xFF00FF00, 0xFF000000);
+	mt6580_fb_char(51, row, 's', 0xFF00FF00, 0xFF000000);
+}
 
 void
 mt6580_early_printf(unsigned int row, const char *s)
 {
+	if (mt6580_t0 == 0) {
+		mt6580_t0 = mt6580_read_cntpct();
+	}
 	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
+	mt6580_fb_elapsed(row);
 	if (row > mt6580_fb_max_row) {
 		mt6580_fb_max_row = row;
 	}
@@ -689,6 +791,12 @@ arm_init(
 	 */
 	mt6580_fb_clear(0xFF000000);
 #if defined(ARM_BOARD_CLASS_MT6580)
+	/*
+	 * The VM now has kernel_map, so io_map_spec() can map device pages.
+	 * Enable watchdog petting before the first marker hold, otherwise
+	 * the ~2s of deliberate delay trips LK's TOPRGU timeout.
+	 */
+	mt6580_wdt_ready = TRUE;
 	/*
 	 * Make panics visible on the panel.  kprintf() output is a no-op
 	 * here, so without this a panic in e.g. kalloc_init() looks
