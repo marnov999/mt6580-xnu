@@ -319,20 +319,7 @@ mt6580_fb_text(unsigned int col, unsigned int row, const char *s,
 /*
  * Called from kernel_bootstrap() so progress remains visible after the
  * direct early console has handed control to the generic kernel.
- */
-void
-mt6580_early_printf(unsigned int row, const char *s)
-{
-	mt6580_fb_text(0, row, s, 0xFFFFFFFF, 0xFF000000);
-	/*
-	 * Bring-up only: hold the marker long enough for a 240 fps capture
-	 * to catch it.  The panel refreshes at ~60 Hz, so without this each
-	 * stage is replaced before it is ever scanned out.
-	 */
-	mt6580_delay_ms(120);
-}
-
-/*
+ *
  * Highest text row drawn so far.  Rows are handed out monotonically by
  * the boot stages (arm_init 0-14, kernel_bootstrap 15-22, vm_mem 23-52,
  * kalloc 53-58), so this tracks the current stage and tells the panic
@@ -340,6 +327,9 @@ mt6580_early_printf(unsigned int row, const char *s)
  * the failing stage.
  */
 static unsigned int mt6580_fb_max_row;
+
+void mt6580_early_printf(unsigned int row, const char *s);
+void mt6580_early_sub(const char *s);
 
 void
 mt6580_early_printf(unsigned int row, const char *s)
@@ -353,7 +343,7 @@ mt6580_early_printf(unsigned int row, const char *s)
 	 * to catch it.  The panel refreshes at ~60 Hz, so without this each
 	 * stage is replaced before it is ever scanned out.
 	 */
-	mt6580_delay_ms(120);
+	mt6580_delay_ms(50);
 }
 
 /*
@@ -376,7 +366,7 @@ mt6580_early_sub(const char *s)
 		}
 	}
 	mt6580_fb_text(0, 37, s, 0xFFFFFF00, 0xFF000000);
-	mt6580_delay_ms(120);
+	mt6580_delay_ms(50);
 }
 
 /*
